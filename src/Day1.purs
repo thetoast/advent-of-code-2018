@@ -4,7 +4,7 @@ import Prelude
 import Effect (Effect)
 import Effect.Console (log)
 
-day1 :: Effect String
-day1 = do
+day1 :: String -> Effect String
+day1 input = do
     log "Day 1 started"
-    pure "Hey this is a result for Day 1!"
+    pure $ "Hey! " <> input <> " is the result for Day 1!"

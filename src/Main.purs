@@ -5,36 +5,47 @@ import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..), fst, snd)
 import Effect (Effect)
 import Effect.Console (log)
+import Foreign (unsafeFromForeign)
 import JQuery as J
 
 import Day1 (day1)
 
 type Solution = Effect String
-type SolutionLink = Tuple String Solution
-type EvalFunction = (Solution -> Effect Unit)
+type AdventFunction = String -> Solution
+type AdventLink = Tuple String AdventFunction
 
-tests :: Array SolutionLink
+tests :: Array AdventLink
 tests = [
     Tuple "Day 1" day1
 ]
 
-runAndPrintResultsTo :: J.JQuery -> Solution -> Effect Unit
-runAndPrintResultsTo resultElem solution = do
+runAndPrintResults :: Solution -> Effect Unit
+runAndPrintResults solution = do
   result <- solution
-  J.setText result resultElem
+  J.setText result =<< J.select "#results"
 
-renderTestLinkTo :: J.JQuery -> EvalFunction -> SolutionLink -> Effect Unit
-renderTestLinkTo testsElem evalFunc testTuple = do
+handleClick :: AdventFunction -> J.JQueryEvent -> J.JQuery -> Effect Unit
+handleClick func _ _ = do
+  inputValue <- (J.select "#input" >>= J.getValue <#> unsafeFromForeign)
+  runAndPrintResults (func inputValue)
+
+createLink :: AdventLink -> Effect J.JQuery
+createLink adventLink = do
   link <- J.create "<a>"
-  J.appendText (fst testTuple) link
+  J.appendText (fst adventLink) link
   J.setAttr "href" "#" link
-  J.on "click" (\_ _ -> evalFunc (snd testTuple)) link
+  J.on "click" (handleClick $ snd adventLink) link
+  pure link
 
-  J.append link testsElem
+renderTestLink :: AdventLink -> Effect Unit
+renderTestLink adventLink = do
+  testsDiv <- J.select "#tests"
+  link <- createLink adventLink
+  br <- J.create "<br>"
+  J.append link testsDiv
+  J.append br testsDiv
 
 main :: Effect Unit
 main = J.ready $ do
   log "Loading app"
-  testsDiv <- J.select "#tests"
-  solutionDiv <- J.select "#results"
-  traverse (renderTestLinkTo testsDiv (runAndPrintResultsTo solutionDiv)) tests
+  traverse renderTestLink tests
