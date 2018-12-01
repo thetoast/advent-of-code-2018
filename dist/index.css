@@ -1,0 +1,28 @@
+body {
+    background: #aaa;
+}
+
+.row {
+    display: flex;
+}
+
+.panel {
+    border: 1px solid black;
+    border-radius: 4px;
+    padding: 10px;
+    background: #ccc;
+    margin: 4px;
+}
+
+.panel h3 {
+    margin-top: 4px;
+}
+
+#tests, #input-div {
+    flex: 1
+}
+
+#input {
+    background: #ddd;
+    width: 100%;
+}
