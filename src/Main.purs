@@ -8,7 +8,7 @@ import Effect.Console (log)
 import Foreign (unsafeFromForeign)
 import JQuery as J
 
-import Day1 (day1)
+import Day1 as Day1
 
 type Solution = Effect String
 type AdventFunction = String -> Solution
@@ -16,7 +16,8 @@ type AdventLink = Tuple String AdventFunction
 
 tests :: Array AdventLink
 tests = [
-    Tuple "Day 1" day1
+    Tuple "Day 1 - Part 1" Day1.part1,
+    Tuple "Day 1 - Part 2" Day1.part2
 ]
 
 runAndPrintResults :: Solution -> Effect Unit
