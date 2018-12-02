@@ -4,6 +4,14 @@ body {
 
 .row {
     display: flex;
+    background: blue;
+}
+
+.col {
+    display: flex;
+    flex-direction: column;
+    background: yellow;
+    height: 100%;
 }
 
 .panel {
@@ -12,18 +20,25 @@ body {
     padding: 10px;
     background: #ccc;
     margin: 4px;
+    flex: 1;
+}
+
+#tests, #input-div, #results-div {
+    background: red;
 }
 
 .panel h3 {
     margin-top: 4px;
 }
 
-#tests, #input-div {
-    flex: 1
-}
-
 #input {
     background: #ddd;
     width: 100%;
-    height: 50%;
+}
+
+.footer {
+    max-height: 32px;
+    width: 100%;
+    align-self: flex-end;
+    background: #ccc
 }
