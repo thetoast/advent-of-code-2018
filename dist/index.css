@@ -51,3 +51,7 @@ body {
 .footer img {
     float: right;
 }
+
+.test-link {
+    margin-right: 10px;
+}

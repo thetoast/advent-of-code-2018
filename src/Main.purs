@@ -2,7 +2,6 @@ module Main where
 
 import Prelude
 import Data.Traversable (traverse)
-import Data.Tuple (Tuple(..), fst, snd)
 import Effect (Effect)
 import Effect.Console (log)
 import Foreign (unsafeFromForeign)
@@ -13,14 +12,16 @@ import Day2 as Day2
 
 type Solution = Effect String
 type AdventFunction = String -> Solution
-type AdventLink = Tuple String AdventFunction
+type TestDay = {
+    day :: Int,
+    part1 :: AdventFunction,
+    part2 :: AdventFunction
+}
 
-tests :: Array AdventLink
+tests :: Array TestDay
 tests = [
-    Tuple "Day 1 - Part 1" Day1.part1,
-    Tuple "Day 1 - Part 2" Day1.part2,
-    Tuple "Day 2 - Part 1" Day2.part1,
-    Tuple "Day 2 - Part 2" Day2.part2
+    {day: 1, part1: Day1.part1, part2: Day1.part2},
+    {day: 2, part1: Day2.part1, part2: Day2.part2}
 ]
 
 runAndPrintResults :: Solution -> Effect Unit
@@ -33,23 +34,28 @@ handleClick func _ _ = do
   inputValue <- (J.select "#input" >>= J.getValue <#> unsafeFromForeign)
   runAndPrintResults (func inputValue)
 
-createLink :: AdventLink -> Effect J.JQuery
-createLink adventLink = do
+createLink :: String -> AdventFunction -> Effect J.JQuery
+createLink name func = do
   link <- J.create "<a>"
-  J.appendText (fst adventLink) link
+  J.appendText name link
   J.setAttr "href" "#" link
-  J.on "click" (handleClick $ snd adventLink) link
+  J.setAttr "class" "test-link" link
+  J.on "click" (handleClick func) link
   pure link
 
-renderTestLink :: AdventLink -> Effect Unit
-renderTestLink adventLink = do
+renderTestLinks :: TestDay -> Effect Unit
+renderTestLinks day = do
   testsDiv <- J.select "#tests"
-  link <- createLink adventLink
+  let dayText = "Day" <> (show day.day) <> " - "
+  part1 <- createLink "Part 1" day.part1
+  part2 <- createLink "Part 2" day.part2
   br <- J.create "<br>"
-  J.append link testsDiv
+  J.appendText dayText testsDiv
+  J.append part1 testsDiv
+  J.append part2 testsDiv
   J.append br testsDiv
 
 main :: Effect Unit
 main = J.ready $ do
   log "Loading app"
-  traverse renderTestLink tests
+  traverse renderTestLinks tests
