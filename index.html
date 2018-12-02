@@ -6,22 +6,31 @@
         <link rel="stylesheet" href="index.css" />
     </head>
     <body>
-        <h1>Advent of Code 2018</h1>
+        <div class="col">
+            <h1 class="row">Advent of Code 2018</h1>
+            <div class="row flex2">
+                <div id="tests" class="panel">
+                    <h3>Tests</h3>
+                </div>
 
-        <div class="row">
-            <div id="tests" class="panel">
-                <h3>Tests</h3>
+                <div id="input-div" class="panel">
+                    <h3>Program Input</h3>
+                    <textarea id="input"></textarea>
+                </div>
             </div>
 
-            <div id="input-div" class="panel">
-                <h3>Program Input</h3>
-                <textarea id="input"></textarea>
+            <div class="row flex1">
+                <div id="results-div" class="panel">
+                    <h3>Results</h3>
+                    <div id="results"></div>
+                </div>
             </div>
-        </div>
 
-        <div id="results-div" class="panel">
-            <h3>Results</h3>
-            <div id="results"></div>
+            <div class="footer">
+                <a href="https://github.com/thetoast/advent-of-code-2018">
+                    <img height="32px" src="img/GitHub_Logo.png">
+                </a>
+            </div>
         </div>
     </body>
 </html>

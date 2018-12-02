@@ -5,6 +5,19 @@ body {
 .row {
     display: flex;
 }
+.row.flex1 {
+    flex: 1;
+}
+.row.flex2 {
+    flex:2
+}
+
+.col {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: space-between;
+}
 
 .panel {
     border: 1px solid black;
@@ -12,18 +25,29 @@ body {
     padding: 10px;
     background: #ccc;
     margin: 4px;
+    flex: 1;
 }
 
 .panel h3 {
     margin-top: 4px;
 }
 
-#tests, #input-div {
-    flex: 1
+#input-div {
+    display: flex;
+    flex-direction: column;
 }
 
 #input {
     background: #ddd;
     width: 100%;
-    height: 50%;
+    height: 100%;
+}
+
+.footer {
+    max-height: 32px;
+    width: 100%;
+}
+
+.footer img {
+    float: right;
 }
