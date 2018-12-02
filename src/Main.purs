@@ -47,8 +47,8 @@ renderTestLinks :: TestDay -> Effect Unit
 renderTestLinks day = do
   testsDiv <- J.select "#tests"
   let dayText = "Day" <> (show day.day) <> " - "
-  part1 <- createLink "Part 1" day.part1
-  part2 <- createLink "Part 2" day.part2
+  part1 <- createLink "[Part 1]" day.part1
+  part2 <- createLink "[Part 2]" day.part2
   br <- J.create "<br>"
   J.appendText dayText testsDiv
   J.append part1 testsDiv

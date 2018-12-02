@@ -1,5 +1,12 @@
 body {
-    background: #aaa;
+    background: #0f0f23;
+    font-family: monospace;
+    color: #009900;
+}
+
+h1 {
+    color: #00cc00;
+    text-shadow: 0 0 2px #00cc00, 0 0 5px #00cc00;
 }
 
 .row {
@@ -20,27 +27,33 @@ body {
 }
 
 .panel {
-    border: 1px solid black;
+    border: 2px solid #007700;
     border-radius: 4px;
     padding: 10px;
-    background: #ccc;
     margin: 4px;
-    flex: 1;
 }
 
-.panel h3 {
+.panel h2 {
     margin-top: 4px;
+    border-bottom: 2px solid #007700;
 }
 
 #input-div {
     display: flex;
     flex-direction: column;
+    flex: 1;
+}
+
+#results-div {
+    flex: 1;
 }
 
 #input {
-    background: #ddd;
+    background: #333;
     width: 100%;
     height: 100%;
+    color: #aaa;
+    border: 2px solid #007700;
 }
 
 .footer {
@@ -49,9 +62,13 @@ body {
 }
 
 .footer img {
+    background-color: #aaa;
     float: right;
+    border-radius: 4px;
 }
 
 .test-link {
     margin-right: 10px;
+    color: #00aa00;
+    text-decoration: none;
 }
