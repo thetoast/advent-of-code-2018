@@ -3258,8 +3258,9 @@ var PS = {};
   var Control_Bind = PS["Control.Bind"];
   var Data_Function = PS["Data.Function"];
   var Data_Functor = PS["Data.Functor"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Show = PS["Data.Show"];
   var Data_Traversable = PS["Data.Traversable"];
-  var Data_Tuple = PS["Data.Tuple"];
   var Day1 = PS["Day1"];
   var Day2 = PS["Day2"];
   var Effect = PS["Effect"];
@@ -3267,7 +3268,15 @@ var PS = {};
   var Foreign = PS["Foreign"];
   var JQuery = PS["JQuery"];
   var Prelude = PS["Prelude"];                 
-  var tests = [ new Data_Tuple.Tuple("Day 1 - Part 1", Day1.part1), new Data_Tuple.Tuple("Day 1 - Part 2", Day1.part2), new Data_Tuple.Tuple("Day 2 - Part 1", Day2.part1), new Data_Tuple.Tuple("Day 2 - Part 2", Day2.part2) ];
+  var tests = [ {
+      day: 1,
+      part1: Day1.part1,
+      part2: Day1.part2
+  }, {
+      day: 2,
+      part1: Day2.part1,
+      part2: Day2.part2
+  } ];
   var runAndPrintResults = function (solution) {
       return function __do() {
           var v = solution();
@@ -3284,33 +3293,40 @@ var PS = {};
           };
       };
   };
-  var createLink = function (adventLink) {
-      return function __do() {
-          var v = JQuery.create("<a>")();
-          JQuery.appendText(Data_Tuple.fst(adventLink))(v)();
-          JQuery.setAttr("href")("#")(v)();
-          JQuery.on("click")(handleClick(Data_Tuple.snd(adventLink)))(v)();
-          return v;
+  var createLink = function (name) {
+      return function (func) {
+          return function __do() {
+              var v = JQuery.create("<a>")();
+              JQuery.appendText(name)(v)();
+              JQuery.setAttr("href")("#")(v)();
+              JQuery.setAttr("class")("test-link")(v)();
+              JQuery.on("click")(handleClick(func))(v)();
+              return v;
+          };
       };
   };
-  var renderTestLink = function (adventLink) {
+  var renderTestLinks = function (day) {
       return function __do() {
           var v = JQuery.select("#tests")();
-          var v1 = createLink(adventLink)();
-          var v2 = JQuery.create("<br>")();
+          var dayText = "Day" + (Data_Show.show(Data_Show.showInt)(day.day) + " - ");
+          var v1 = createLink("Part 1")(day.part1)();
+          var v2 = createLink("Part 2")(day.part2)();
+          var v3 = JQuery.create("<br>")();
+          JQuery.appendText(dayText)(v)();
           JQuery.append(v1)(v)();
-          return JQuery.append(v2)(v)();
+          JQuery.append(v2)(v)();
+          return JQuery.append(v3)(v)();
       };
   };
   var main = JQuery.ready(function __do() {
       Effect_Console.log("Loading app")();
-      return Data_Traversable.traverse(Data_Traversable.traversableArray)(Effect.applicativeEffect)(renderTestLink)(tests)();
+      return Data_Traversable.traverse(Data_Traversable.traversableArray)(Effect.applicativeEffect)(renderTestLinks)(tests)();
   });
   exports["tests"] = tests;
   exports["runAndPrintResults"] = runAndPrintResults;
   exports["handleClick"] = handleClick;
   exports["createLink"] = createLink;
-  exports["renderTestLink"] = renderTestLink;
+  exports["renderTestLinks"] = renderTestLinks;
   exports["main"] = main;
 })(PS["Main"] = PS["Main"] || {});
 PS["Main"].main();
