@@ -12,15 +12,13 @@ import Data.String (Pattern(..))
 import Data.Tuple (Tuple(..), snd)
 import Effect (Effect)
 import Effect.Console (log)
+import Util (splitLines)
 
 type LetterDiff = Tuple String String
 type WordDiff = Tuple (Tuple String String) (Array LetterDiff)
 
 letters :: String -> Array String
 letters = String.split (Pattern "")
-
-words' :: String -> Array String
-words' = String.split (Pattern "\n")
 
 hasN :: Int -> String -> Boolean
 hasN n input = do
@@ -34,14 +32,14 @@ hasN n input = do
 
 getSum :: String -> Int
 getSum input = do
-    let words = List.fromFoldable $ words' input
+    let words = List.fromFoldable $ splitLines input
     let twos = List.length $ List.filter (hasN 2) words
     let threes = List.length $ List.filter (hasN 3) words
     twos * threes
 
 getValidBoxes :: String -> Array String
 getValidBoxes input = do
-    let words = words' input
+    let words = splitLines input
     let twos = Array.filter (hasN 2) words
     let threes = Array.filter (hasN 3) words
     Array.concat $ [twos, threes]
