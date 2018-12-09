@@ -6,10 +6,10 @@ import Data.Either (Either(..))
 import Data.Maybe (isJust)
 import Data.String.Regex (match)
 import Effect (Effect)
-import Effect.Console (log)
+--import Effect.Console (log)
 import Test.Assert (assert')
 
-import Day3 (Claim, Point, claimRegex, parseClaim, getClaimPoints, solve1, solve2)
+import Day3 (Claim, Point, claimRegex, parseClaim, getClaimPoints, solve1)
 
 claimStr1 = "#1 @ 1,3: 4x4" :: String
 claimStr2 = "#2 @ 3,1: 4x4" :: String
@@ -68,4 +68,4 @@ main = do
     assert' "Points should be correct" $ getClaimPoints claim2 == claim2Points
 
     assert' "Should be 4" $ solve1 (claim1 : claim2 : claim3 : []) == 4
-    log $ show $ solve2 (claim1 : claim2 : claim3 : [])
+    -- log $ show $ solve2 (claim1 : claim2 : claim3 : [])
