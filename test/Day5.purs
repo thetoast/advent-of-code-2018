@@ -15,10 +15,10 @@ round3 = makePolymer "dabCBAcaDA" :: Polymer
 
 main :: Effect Unit
 main = do
-    assert' "round0 should become round1" $ condense Nothing round0 == round1
-    assert' "round1 should become round2" $ condense Nothing round1 == round2
-    assert' "round2 should become round3" $ condense Nothing round2 == round3
-    assert' "round3 should not change" $ condense Nothing round3 == round3
+    assert' "round0 should become round1" $ condense 0 round0 == round1
+    assert' "round1 should become round2" $ condense 0 round1 == round2
+    assert' "round2 should become round3" $ condense 0 round2 == round3
+    assert' "round3 should not change" $ condense 0 round3 == round3
 
     assert' "round0 should become round3" $ condenseR round0 == round3
     assert' "Part 1 works" $ solve1 round0Str == Just 10
