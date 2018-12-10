@@ -143,11 +143,15 @@ handleEvent acc evt = do
                updateSleepTime acc t
             Nothing -> acc
 
-findSleepiestGuard :: String -> Maybe (Tuple Guard (List (Tuple DateTime DateTime)))
-findSleepiestGuard input = do
+generateData :: String -> Maybe Solve1Data
+generateData input = do
     sorted <- Array.sort <$> parseEvents input
     let acc = { currentGuard: Nothing, currentSleep: Nothing, guardTimes: Map.empty, guardRanges: Map.empty }
-    let res = foldl handleEvent acc sorted
+    pure $ foldl handleEvent acc sorted
+
+findSleepiestGuard :: String -> Maybe (Tuple Guard (List (Tuple DateTime DateTime)))
+findSleepiestGuard input = do
+    res <- generateData input
     let pairs = Map.toUnfoldableUnordered res.guardTimes
     guard <- fst <$> (Array.head $ Array.sortBy orderPairs pairs)
     list <- Map.lookup guard res.guardRanges
@@ -177,8 +181,22 @@ solve1 input = do
     sleepiestMinute <- findSleepiestMinute times
     Just $ (mul $ unwrap guard) $ (fst $ sleepiestMinute)
 
+solve2 :: String -> Maybe Int
+solve2 input = do
+    res <- generateData input
+    sleepiestByGuard <- traverse findSleepiestMinute res.guardRanges
+    let pairs = Map.toUnfoldableUnordered sleepiestByGuard
+    let sorted = Array.sortBy mostTimes pairs
+    choice <- Array.head sorted
+    let guard = fst choice
+    let minute = fst $ snd choice
+    Just $ (unwrap guard) * minute
+    where
+        mostTimes (Tuple _ (Tuple _ len1)) (Tuple _ (Tuple _ len2)) =
+            compare len2 len1 -- reverse
+
 part1 :: String -> Effect String
 part1 = pure <<< show <<< solve1
 
 part2 :: String -> Effect String
-part2 input = pure "Part 2"
+part2 = pure <<< show <<< solve2

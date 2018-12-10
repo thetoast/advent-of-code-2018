@@ -73,6 +73,19 @@ var PS = {};
       return r1 === r2;
     };
   };
+
+  exports.eqArrayImpl = function (f) {
+    return function (xs) {
+      return function (ys) {
+        if (xs === ys) return true;
+        if (xs.length !== ys.length) return false;
+        for (var i = 0; i < xs.length; i++) {
+          if (!f(xs[i])(ys[i])) return false;
+        }
+        return true;
+      };
+    };
+  };
 })(PS["Data.Eq"] = PS["Data.Eq"] || {});
 (function(exports) {
     "use strict";
@@ -388,6 +401,9 @@ var PS = {};
   var eqBoolean = new Eq($foreign.refEq);
   var eq = function (dict) {
       return dict.eq;
+  };
+  var eqArray = function (dictEq) {
+      return new Eq($foreign.eqArrayImpl(eq(dictEq)));
   }; 
   var eqRowCons = function (dictEqRecord) {
       return function (dictCons) {
@@ -424,6 +440,7 @@ var PS = {};
   exports["eqNumber"] = eqNumber;
   exports["eqChar"] = eqChar;
   exports["eqString"] = eqString;
+  exports["eqArray"] = eqArray;
   exports["eqRec"] = eqRec;
   exports["eqRowNil"] = eqRowNil;
   exports["eqRowCons"] = eqRowCons;
@@ -1107,6 +1124,36 @@ var PS = {};
   };
 
   //------------------------------------------------------------------------------
+  // Extending arrays ------------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports.cons = function (e) {
+    return function (l) {
+      return [e].concat(l);
+    };
+  };
+
+  exports.snoc = function (l) {
+    return function (e) {
+      var l1 = l.slice();
+      l1.push(e);
+      return l1;
+    };
+  };
+
+  //------------------------------------------------------------------------------
+  // Non-indexed reads -----------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports["uncons'"] = function (empty) {
+    return function (next) {
+      return function (xs) {
+        return xs.length === 0 ? empty({}) : next(xs[0])(xs.slice(1));
+      };
+    };
+  };
+
+  //------------------------------------------------------------------------------
   // Indexed operations ----------------------------------------------------------
   //------------------------------------------------------------------------------
 
@@ -1446,6 +1493,19 @@ var PS = {};
               throw new Error("Failed pattern match at Data.Maybe line 268, column 1 - line 268, column 46: " + [ v.constructor.name ]);
           })());
       };
+  }; 
+  var eqMaybe = function (dictEq) {
+      return new Data_Eq.Eq(function (x) {
+          return function (y) {
+              if (x instanceof Nothing && y instanceof Nothing) {
+                  return true;
+              };
+              if (x instanceof Just && y instanceof Just) {
+                  return Data_Eq.eq(dictEq)(x.value0)(y.value0);
+              };
+              return false;
+          };
+      });
   };
   var applyMaybe = new Control_Apply.Apply(function () {
       return functorMaybe;
@@ -1487,6 +1547,7 @@ var PS = {};
   exports["applyMaybe"] = applyMaybe;
   exports["applicativeMaybe"] = applicativeMaybe;
   exports["bindMaybe"] = bindMaybe;
+  exports["eqMaybe"] = eqMaybe;
   exports["showMaybe"] = showMaybe;
 })(PS["Data.Maybe"] = PS["Data.Maybe"] || {});
 (function(exports) {
@@ -2129,6 +2190,14 @@ var PS = {};
   var Unsafe_Coerce = PS["Unsafe.Coerce"];
   var zip = $foreign.zipWith(Data_Tuple.Tuple.create);
   var updateAt = $foreign._updateAt(Data_Maybe.Just.create)(Data_Maybe.Nothing.value);
+  var uncons = $foreign["uncons'"](Data_Function["const"](Data_Maybe.Nothing.value))(function (x) {
+      return function (xs) {
+          return new Data_Maybe.Just({
+              head: x,
+              tail: xs
+          });
+      };
+  });
   var sortBy = function (comp) {
       return function (xs) {
           var comp$prime = function (x) {
@@ -2207,6 +2276,7 @@ var PS = {};
   var concatMap = Data_Function.flip(Control_Bind.bind(Control_Bind.bindArray));
   exports["fromFoldable"] = fromFoldable;
   exports["head"] = head;
+  exports["uncons"] = uncons;
   exports["index"] = index;
   exports["updateAt"] = updateAt;
   exports["modifyAt"] = modifyAt;
@@ -2219,6 +2289,8 @@ var PS = {};
   exports["zip"] = zip;
   exports["range"] = $foreign.range;
   exports["length"] = $foreign.length;
+  exports["cons"] = $foreign.cons;
+  exports["snoc"] = $foreign.snoc;
   exports["concat"] = $foreign.concat;
   exports["filter"] = $foreign.filter;
 })(PS["Data.Array"] = PS["Data.Array"] || {});
@@ -4098,7 +4170,21 @@ var PS = {};
           return Data_Semigroup.append(Data_List_Types.semigroupList)(keys(v.value0))(Data_Semigroup.append(Data_List_Types.semigroupList)(Control_Applicative.pure(Data_List_Types.applicativeList)(v.value1))(Data_Semigroup.append(Data_List_Types.semigroupList)(keys(v.value3))(Data_Semigroup.append(Data_List_Types.semigroupList)(Control_Applicative.pure(Data_List_Types.applicativeList)(v.value4))(keys(v.value6)))));
       };
       throw new Error("Failed pattern match at Data.Map.Internal line 596, column 1 - line 596, column 38: " + [ v.constructor.name ]);
-  }; 
+  };
+  var functorMap = new Data_Functor.Functor(function (v) {
+      return function (v1) {
+          if (v1 instanceof Leaf) {
+              return Leaf.value;
+          };
+          if (v1 instanceof Two) {
+              return new Two(Data_Functor.map(functorMap)(v)(v1.value0), v1.value1, v(v1.value2), Data_Functor.map(functorMap)(v)(v1.value3));
+          };
+          if (v1 instanceof Three) {
+              return new Three(Data_Functor.map(functorMap)(v)(v1.value0), v1.value1, v(v1.value2), Data_Functor.map(functorMap)(v)(v1.value3), v1.value4, v(v1.value5), Data_Functor.map(functorMap)(v)(v1.value6));
+          };
+          throw new Error("Failed pattern match at Data.Map.Internal line 93, column 1 - line 93, column 39: " + [ v.constructor.name, v1.constructor.name ]);
+      };
+  });
   var fromZipper = function ($copy_dictOrd) {
       return function ($copy_v) {
           return function ($copy_tree) {
@@ -4469,6 +4555,47 @@ var PS = {};
           return down(Data_List_Types.Nil.value);
       };
   };
+  var foldableMap = new Data_Foldable.Foldable(function (dictMonoid) {
+      return function (f) {
+          return function (m) {
+              return Data_Foldable.foldMap(Data_List_Types.foldableList)(dictMonoid)(f)(values(m));
+          };
+      };
+  }, function (f) {
+      return function (z) {
+          return function (m) {
+              return Data_Foldable.foldl(Data_List_Types.foldableList)(f)(z)(values(m));
+          };
+      };
+  }, function (f) {
+      return function (z) {
+          return function (m) {
+              return Data_Foldable.foldr(Data_List_Types.foldableList)(f)(z)(values(m));
+          };
+      };
+  });
+  var traversableMap = new Data_Traversable.Traversable(function () {
+      return foldableMap;
+  }, function () {
+      return functorMap;
+  }, function (dictApplicative) {
+      return Data_Traversable.traverse(traversableMap)(dictApplicative)(Control_Category.identity(Control_Category.categoryFn));
+  }, function (dictApplicative) {
+      return function (f) {
+          return function (v) {
+              if (v instanceof Leaf) {
+                  return Control_Applicative.pure(dictApplicative)(Leaf.value);
+              };
+              if (v instanceof Two) {
+                  return Control_Apply.apply(dictApplicative.Apply0())(Control_Apply.apply(dictApplicative.Apply0())(Control_Apply.apply(dictApplicative.Apply0())(Data_Functor.map((dictApplicative.Apply0()).Functor0())(Two.create)(Data_Traversable.traverse(traversableMap)(dictApplicative)(f)(v.value0)))(Control_Applicative.pure(dictApplicative)(v.value1)))(f(v.value2)))(Data_Traversable.traverse(traversableMap)(dictApplicative)(f)(v.value3));
+              };
+              if (v instanceof Three) {
+                  return Control_Apply.apply(dictApplicative.Apply0())(Control_Apply.apply(dictApplicative.Apply0())(Control_Apply.apply(dictApplicative.Apply0())(Control_Apply.apply(dictApplicative.Apply0())(Control_Apply.apply(dictApplicative.Apply0())(Control_Apply.apply(dictApplicative.Apply0())(Data_Functor.map((dictApplicative.Apply0()).Functor0())(Three.create)(Data_Traversable.traverse(traversableMap)(dictApplicative)(f)(v.value0)))(Control_Applicative.pure(dictApplicative)(v.value1)))(f(v.value2)))(Data_Traversable.traverse(traversableMap)(dictApplicative)(f)(v.value3)))(Control_Applicative.pure(dictApplicative)(v.value4)))(f(v.value5)))(Data_Traversable.traverse(traversableMap)(dictApplicative)(f)(v.value6));
+              };
+              throw new Error("Failed pattern match at Data.Map.Internal line 116, column 1 - line 116, column 47: " + [ f.constructor.name, v.constructor.name ]);
+          };
+      };
+  });
   var empty = Leaf.value;
   var $$delete = function (dictOrd) {
       return function (k) {
@@ -4504,6 +4631,9 @@ var PS = {};
   exports["alter"] = alter;
   exports["keys"] = keys;
   exports["values"] = values;
+  exports["functorMap"] = functorMap;
+  exports["foldableMap"] = foldableMap;
+  exports["traversableMap"] = traversableMap;
 })(PS["Data.Map.Internal"] = PS["Data.Map.Internal"] || {});
 (function(exports) {
   // Generated by purs version 0.12.0
@@ -4705,6 +4835,10 @@ var PS = {};
       return s.split(sep);
     };
   };
+
+  exports.toUpper = function (s) {
+    return s.toUpperCase();
+  };
 })(PS["Data.String.Common"] = PS["Data.String.Common"] || {});
 (function(exports) {
   // Generated by purs version 0.12.0
@@ -4715,6 +4849,7 @@ var PS = {};
   var Data_String_Pattern = PS["Data.String.Pattern"];
   var Prelude = PS["Prelude"];
   exports["split"] = $foreign.split;
+  exports["toUpper"] = $foreign.toUpper;
 })(PS["Data.String.Common"] = PS["Data.String.Common"] || {});
 (function(exports) {
   // Generated by purs version 0.12.0
@@ -5171,7 +5306,9 @@ var PS = {};
   var Data_String_Common = PS["Data.String.Common"];
   var Data_String_Pattern = PS["Data.String.Pattern"];                 
   var splitLines = Data_String_Common.split("\x0a");
+  var splitChars = Data_String_Common.split("");
   exports["splitLines"] = splitLines;
+  exports["splitChars"] = splitChars;
 })(PS["Util"] = PS["Util"] || {});
 (function(exports) {
   // Generated by purs version 0.12.0
@@ -5591,9 +5728,6 @@ var PS = {};
       };
       return Wake;
   })();
-  var part2 = function (input) {
-      return Control_Applicative.pure(Effect.applicativeEffect)("Part 2");
-  };
   var newtypeGuard = new Data_Newtype.Newtype(function (n) {
       return n;
   }, Guard);
@@ -5604,8 +5738,8 @@ var PS = {};
               return Data_Ord.compare(Data_Ord.ordInt)(Data_Array_NonEmpty.length(a2))(Data_Array_NonEmpty.length(a1));
           };
       };
-      var getMinutes = function ($159) {
-          return Data_Enum.fromEnum(Data_Time_Component.boundedEnumMinute)(Data_Time.minute(Data_DateTime.time($159)));
+      var getMinutes = function ($179) {
+          return Data_Enum.fromEnum(Data_Time_Component.boundedEnumMinute)(Data_Time.minute(Data_DateTime.time($179)));
       };
       var toMinutesArr = function (v) {
           return Data_Array.range(getMinutes(v.value0))(getMinutes(v.value1));
@@ -5764,8 +5898,8 @@ var PS = {};
   };
   var dateRegex = Data_Either.hush(Data_String_Regex.regex("\\[(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2})\\]")(Data_String_Regex_Flags.noFlags));
   var createDate = function (matches) {
-      var getMatchAsInt = Control_Bind.composeKleisliFlipped(Data_Maybe.bindMaybe)(Data_Int.fromString)(function ($160) {
-          return Control_Bind.join(Data_Maybe.bindMaybe)(Data_Array_NonEmpty.index(matches)($160));
+      var getMatchAsInt = Control_Bind.composeKleisliFlipped(Data_Maybe.bindMaybe)(Data_Int.fromString)(function ($180) {
+          return Control_Bind.join(Data_Maybe.bindMaybe)(Data_Array_NonEmpty.index(matches)($180));
       });
       return Control_Bind.bind(Data_Maybe.bindMaybe)(Control_Bind.bindFlipped(Data_Maybe.bindMaybe)(Data_Enum.toEnum(Data_Date_Component.boundedEnumYear))(getMatchAsInt(1)))(function (v) {
           return Control_Bind.bind(Data_Maybe.bindMaybe)(Control_Bind.bindFlipped(Data_Maybe.bindMaybe)(Data_Enum.toEnum(Data_Date_Component.boundedEnumMonth))(getMatchAsInt(2)))(function (v1) {
@@ -5853,12 +5987,7 @@ var PS = {};
   var parseEvents = function (input) {
       return Data_Traversable.traverse(Data_Traversable.traversableArray)(Data_Maybe.applicativeMaybe)(parseLog)(Util.splitLines(input));
   };
-  var findSleepiestGuard = function (input) {
-      var orderPairs = function (v) {
-          return function (v1) {
-              return Data_Ord.compare(Data_Ord.ordNumber)(v1.value1)(v.value1);
-          };
-      };
+  var generateData = function (input) {
       return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Functor.map(Data_Maybe.functorMaybe)(Data_Array.sort(ordGuardEvent))(parseEvents(input)))(function (v) {
           var acc = {
               currentGuard: Data_Maybe.Nothing.value,
@@ -5866,10 +5995,19 @@ var PS = {};
               guardTimes: Data_Map_Internal.empty,
               guardRanges: Data_Map_Internal.empty
           };
-          var res = Data_Foldable.foldl(Data_Foldable.foldableArray)(handleEvent)(acc)(v);
-          var pairs = Data_Map_Internal.toUnfoldableUnordered(Data_Unfoldable.unfoldableArray)(res.guardTimes);
+          return Control_Applicative.pure(Data_Maybe.applicativeMaybe)(Data_Foldable.foldl(Data_Foldable.foldableArray)(handleEvent)(acc)(v));
+      });
+  };
+  var findSleepiestGuard = function (input) {
+      var orderPairs = function (v) {
+          return function (v1) {
+              return Data_Ord.compare(Data_Ord.ordNumber)(v1.value1)(v.value1);
+          };
+      };
+      return Control_Bind.bind(Data_Maybe.bindMaybe)(generateData(input))(function (v) {
+          var pairs = Data_Map_Internal.toUnfoldableUnordered(Data_Unfoldable.unfoldableArray)(v.guardTimes);
           return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Functor.map(Data_Maybe.functorMaybe)(Data_Tuple.fst)(Data_Array.head(Data_Array.sortBy(orderPairs)(pairs))))(function (v1) {
-              return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Map_Internal.lookup(ordGuard)(v1)(res.guardRanges))(function (v2) {
+              return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Map_Internal.lookup(ordGuard)(v1)(v.guardRanges))(function (v2) {
                   return Data_Maybe.Just.create(new Data_Tuple.Tuple(v1, v2));
               });
           });
@@ -5884,8 +6022,29 @@ var PS = {};
           });
       });
   };
-  var part1 = function ($161) {
-      return Control_Applicative.pure(Effect.applicativeEffect)(Data_Show.show(Data_Maybe.showMaybe(Data_Show.showInt))(solve1($161)));
+  var part1 = function ($181) {
+      return Control_Applicative.pure(Effect.applicativeEffect)(Data_Show.show(Data_Maybe.showMaybe(Data_Show.showInt))(solve1($181)));
+  };
+  var solve2 = function (input) {
+      var mostTimes = function (v) {
+          return function (v1) {
+              return Data_Ord.compare(Data_Ord.ordInt)(v1.value1.value1)(v.value1.value1);
+          };
+      };
+      return Control_Bind.bind(Data_Maybe.bindMaybe)(generateData(input))(function (v) {
+          return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Traversable.traverse(Data_Map_Internal.traversableMap)(Data_Maybe.applicativeMaybe)(findSleepiestMinute)(v.guardRanges))(function (v1) {
+              var pairs = Data_Map_Internal.toUnfoldableUnordered(Data_Unfoldable.unfoldableArray)(v1);
+              var sorted = Data_Array.sortBy(mostTimes)(pairs);
+              return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Array.head(sorted))(function (v2) {
+                  var guard = Data_Tuple.fst(v2);
+                  var minute = Data_Tuple.fst(Data_Tuple.snd(v2));
+                  return Data_Maybe.Just.create(Data_Newtype.unwrap(newtypeGuard)(guard) * minute | 0);
+              });
+          });
+      });
+  };
+  var part2 = function ($182) {
+      return Control_Applicative.pure(Effect.applicativeEffect)(Data_Show.show(Data_Maybe.showMaybe(Data_Show.showInt))(solve2($182)));
   };
   exports["Guard"] = Guard;
   exports["Start"] = Start;
@@ -5900,9 +6059,11 @@ var PS = {};
   exports["parseEvents"] = parseEvents;
   exports["updateSleepTime"] = updateSleepTime;
   exports["handleEvent"] = handleEvent;
+  exports["generateData"] = generateData;
   exports["findSleepiestGuard"] = findSleepiestGuard;
   exports["findSleepiestMinute"] = findSleepiestMinute;
   exports["solve1"] = solve1;
+  exports["solve2"] = solve2;
   exports["part1"] = part1;
   exports["part2"] = part2;
   exports["eqGuard"] = eqGuard;
@@ -5911,6 +6072,151 @@ var PS = {};
   exports["eqGuardEvent"] = eqGuardEvent;
   exports["ordGuardEvent"] = ordGuardEvent;
 })(PS["Day4"] = PS["Day4"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Array = PS["Data.Array"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Show = PS["Data.Show"];
+  var Data_String = PS["Data.String"];
+  var Data_String_Common = PS["Data.String.Common"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var Effect = PS["Effect"];
+  var Prelude = PS["Prelude"];
+  var Util = PS["Util"];                 
+  var snoc = function (v) {
+      return function (u) {
+          if (v instanceof Data_Maybe.Nothing) {
+              return Control_Applicative.pure(Data_Maybe.applicativeMaybe)([ u ]);
+          };
+          if (v instanceof Data_Maybe.Just) {
+              return Control_Applicative.pure(Data_Maybe.applicativeMaybe)(Data_Array.snoc(v.value0)(u));
+          };
+          throw new Error("Failed pattern match at Day5 line 53, column 1 - line 53, column 42: " + [ v.constructor.name, u.constructor.name ]);
+      };
+  };
+  var plength = Data_Functor.map(Data_Maybe.functorMaybe)(Data_Array.length);
+  var part2 = Control_Applicative.pure(Effect.applicativeEffect);
+  var makePolymer = function (input) {
+      return Data_Functor.map(Data_Maybe.functorMaybe)(Util.splitChars)(Data_Array.index(Util.splitLines(input))(0));
+  };
+  var join = function (v) {
+      return function (v1) {
+          if (v instanceof Data_Maybe.Nothing && v1 instanceof Data_Maybe.Nothing) {
+              return Data_Maybe.Nothing.value;
+          };
+          if (v instanceof Data_Maybe.Nothing && v1 instanceof Data_Maybe.Just) {
+              return new Data_Maybe.Just(v1.value0);
+          };
+          if (v instanceof Data_Maybe.Just && v1 instanceof Data_Maybe.Nothing) {
+              return new Data_Maybe.Just(v.value0);
+          };
+          if (v instanceof Data_Maybe.Just && v1 instanceof Data_Maybe.Just) {
+              return Control_Applicative.pure(Data_Maybe.applicativeMaybe)(Data_Array.concat([ v.value0, v1.value0 ]));
+          };
+          throw new Error("Failed pattern match at Day5 line 46, column 1 - line 46, column 38: " + [ v.constructor.name, v1.constructor.name ]);
+      };
+  };
+  var extract = function (polymer) {
+      var v = plength(polymer);
+      if (v instanceof Data_Maybe.Nothing) {
+          return Data_Maybe.Nothing.value;
+      };
+      if (v instanceof Data_Maybe.Just && v.value0 === 1) {
+          return Data_Maybe.Nothing.value;
+      };
+      if (v instanceof Data_Maybe.Just && v.value0 === 2) {
+          return Data_Maybe.Nothing.value;
+      };
+      return Control_Bind.bind(Data_Maybe.bindMaybe)(Control_Bind.bindFlipped(Data_Maybe.bindMaybe)(Data_Array.uncons)(polymer))(function (v1) {
+          return Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Array.uncons(v1.tail))(function (v2) {
+              return Control_Applicative.pure(Data_Maybe.applicativeMaybe)({
+                  pair: new Data_Tuple.Tuple(v1.head, v2.head),
+                  rest: Control_Applicative.pure(Data_Maybe.applicativeMaybe)(v2.tail)
+              });
+          });
+      });
+  };
+  var canDrop = function (u1) {
+      return function (u2) {
+          return !(u1 === u2) && (Data_String_Common.toUpper(u1) === u2 || Data_String_Common.toUpper(u2) === u1);
+      };
+  };
+  var condense = function ($copy_acc) {
+      return function ($copy_polymer) {
+          var $tco_var_acc = $copy_acc;
+          var $tco_done = false;
+          var $tco_result;
+          function $tco_loop(acc, polymer) {
+              var v = extract(polymer);
+              if (v instanceof Data_Maybe.Nothing) {
+                  $tco_done = true;
+                  return join(acc)(polymer);
+              };
+              if (v instanceof Data_Maybe.Just) {
+                  var v1 = canDrop(v.value0.pair.value0)(v.value0.pair.value1);
+                  if (v1) {
+                      $tco_done = true;
+                      return join(acc)(v.value0.rest);
+                  };
+                  if (!v1) {
+                      $tco_var_acc = snoc(acc)(v.value0.pair.value0);
+                      $copy_polymer = Data_Functor.map(Data_Maybe.functorMaybe)(Data_Array.cons(v.value0.pair.value1))(v.value0.rest);
+                      return;
+                  };
+                  throw new Error("Failed pattern match at Day5 line 61, column 43 - line 63, column 67: " + [ v1.constructor.name ]);
+              };
+              throw new Error("Failed pattern match at Day5 line 59, column 24 - line 63, column 67: " + [ v.constructor.name ]);
+          };
+          while (!$tco_done) {
+              $tco_result = $tco_loop($tco_var_acc, $copy_polymer);
+          };
+          return $tco_result;
+      };
+  };
+  var condenseR = function ($copy_polymer) {
+      var $tco_done = false;
+      var $tco_result;
+      function $tco_loop(polymer) {
+          var res = condense(Data_Maybe.Nothing.value)(polymer);
+          var $29 = Data_Eq.eq(Data_Maybe.eqMaybe(Data_Eq.eqArray(Data_Eq.eqString)))(res)(polymer);
+          if ($29) {
+              $tco_done = true;
+              return res;
+          };
+          $copy_polymer = res;
+          return;
+      };
+      while (!$tco_done) {
+          $tco_result = $tco_loop($copy_polymer);
+      };
+      return $tco_result;
+  };
+  var solve1 = function ($30) {
+      return plength(condenseR(makePolymer($30)));
+  };
+  var part1 = function ($31) {
+      return Control_Applicative.pure(Effect.applicativeEffect)(Data_Show.show(Data_Maybe.showMaybe(Data_Show.showInt))(solve1($31)));
+  };
+  exports["makePolymer"] = makePolymer;
+  exports["plength"] = plength;
+  exports["extract"] = extract;
+  exports["canDrop"] = canDrop;
+  exports["join"] = join;
+  exports["snoc"] = snoc;
+  exports["condense"] = condense;
+  exports["condenseR"] = condenseR;
+  exports["solve1"] = solve1;
+  exports["part1"] = part1;
+  exports["part2"] = part2;
+})(PS["Day5"] = PS["Day5"] || {});
 (function(exports) {
     "use strict";
 
@@ -6059,6 +6365,7 @@ var PS = {};
   var Day2 = PS["Day2"];
   var Day3 = PS["Day3"];
   var Day4 = PS["Day4"];
+  var Day5 = PS["Day5"];
   var Effect = PS["Effect"];
   var Effect_Console = PS["Effect.Console"];
   var Foreign = PS["Foreign"];
@@ -6080,6 +6387,10 @@ var PS = {};
       day: 4,
       part1: Day4.part1,
       part2: Day4.part2
+  }, {
+      day: 5,
+      part1: Day5.part1,
+      part2: Day5.part2
   } ];
   var runAndPrintResults = function (solution) {
       return function __do() {
