@@ -3,11 +3,16 @@ module Day5 where
 import Prelude
 
 import Data.Array ((!!))
-import Data.Array (concat, cons, drop, index, length, snoc, take, takeEnd, uncons) as Array
+import Data.Array (concat, head, index, length, snoc, sort, take, takeEnd) as Array
+import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.String (toUpper) as String
+import Data.String.Regex (regex, replace)
+import Data.String.Regex.Flags (global, ignoreCase)
+import Data.Traversable (sequence, traverse)
 import Data.Tuple (Tuple(..))
 import Effect (Effect)
+import Effect.Console (log)
 import Util (splitChars, splitLines) as Util
 
 type Polymer = Maybe (Array String)
@@ -43,11 +48,11 @@ canDrop u1 u2 =
     && (((String.toUpper u1) == u2) || ((String.toUpper u2) == u1))
 
 -- | Joins to polymers
-join :: Polymer -> Polymer -> Polymer
-join Nothing Nothing = Nothing
-join Nothing (Just list) = Just list
-join (Just list) Nothing = Just list
-join (Just list1) (Just list2) = pure $ Array.concat [list1, list2]
+pjoin :: Polymer -> Polymer -> Polymer
+pjoin Nothing Nothing = Nothing
+pjoin Nothing (Just list) = Just list
+pjoin (Just list) Nothing = Just list
+pjoin (Just list1) (Just list2) = pure $ Array.concat [list1, list2]
 
 -- | Appends a PolymerUnit to the end of a Polymer
 snoc :: Polymer -> PolymerUnit -> Polymer
@@ -59,27 +64,46 @@ deleteAt idx1 idx2 p = do
     let first = Array.take idx1 <$> p
     lastAmt <- sub <$> plength p <*> Just (idx2+1)
     let last = Array.takeEnd lastAmt <$> p
-    join first last
+    pjoin first last
 
 -- | "Condenses" a polymer according to rules
 condense :: Int -> Polymer -> Polymer
 condense pos polymer = case extract pos polymer of
     Nothing -> polymer
     Just (Tuple u1 u2) -> case canDrop u1 u2 of
-        true -> deleteAt pos (pos+1) polymer
+        true -> condense (max (pos-1) 0) (deleteAt pos (pos+1) polymer)
         false -> condense (pos+1) polymer
 
--- | Recursively condenses a polymer until it's fully condensed
-condenseR :: Polymer -> Polymer
-condenseR polymer = do
-    let res = condense 0 polymer
-    if (plength res) == (plength polymer) then res else condenseR res
-
 solve1 :: String -> Maybe Int
-solve1 = plength <<< condenseR <<< makePolymer
+solve1 = plength <<< condense 0 <<< makePolymer
+
+dropAll :: String -> String -> String
+dropAll letter string = do
+    case regex (letter<>"+") (global <> ignoreCase) of
+        Right pattern -> replace pattern "" string
+        Left _ -> string
 
 part1 :: String -> Effect String
 part1 = pure <<< show <<< solve1
 
+letters :: Array String
+letters = [
+    "a", "b", "c", "d", "e", "f", "g", "h",
+    "i", "j", "k", "l", "m", "n", "o", "p", "q",
+    "r", "s", "t", "u", "v", "w", "x", "y", "z"
+]
+
+solve2 :: String -> String -> Effect (Maybe Int)
+solve2 letter input = do
+    log $ "Solving for " <> letter
+    let res = solve1 $ dropAll letter input
+    log $ show res
+    pure res
+
+
+
 part2 :: String -> Effect String
-part2 = pure
+part2 input = do
+    log "Calculating stage1s"
+    res <- traverse (flip solve2 input) letters
+    pure $ show $ Array.head <$> Array.sort <$> sequence res
