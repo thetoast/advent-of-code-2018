@@ -16,14 +16,9 @@ import Data.String.Regex (Regex, regex, match)
 import Data.String.Regex.Flags (noFlags)
 import Data.Traversable (traverse)
 import Effect (Effect)
-import Util (splitLines)
+import Util (splitLines, Point, Size)
 
-type Point = { x :: Int, y :: Int }
-type Size = { width :: Int, height :: Int }
-type Box = { point :: Point, size :: Size }
 type Claim = { id :: Int, point :: Point, size :: Size }
---type IntersectingClaim = { claim :: Claim, intersection :: Box }
---type PlacedClaim = { claim :: Claim, intersecting :: List IntersectingClaim } 
 type Fabric = Array (Array (List Claim))
 
 emptyClaim :: Claim
