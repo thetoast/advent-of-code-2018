@@ -1,18 +1,18 @@
 module Day2 where
 
 import Prelude
+
+import Control.Monad.RWS (ask)
 import Data.Array as Array
 import Data.Foldable (foldl)
-import Data.List as List
 import Data.List (List(..))
+import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.String as String
 import Data.String (Pattern(..))
+import Data.String as String
 import Data.Tuple (Tuple(..), snd)
-import Effect (Effect)
-import Effect.Console (log)
-import Util (splitLines)
+import Util (Program, Solution, log', splitLines)
 
 type LetterDiff = Tuple String String
 type WordDiff = Tuple (Tuple String String) (Array LetterDiff)
@@ -61,12 +61,14 @@ collectDiffsOfN n words = do
     where
         lengthN diff = eq n (Array.length (snd diff))
 
-part1 :: String -> Effect String
-part1 input = do
-    log "Day2 part 1 started"
-    pure $ show $ getSum input
+part1 :: Program Solution
+part1 = do
+  input <- ask 
+  log' "Day2 part 1 started"
+  pure $ Just $ show $ getSum input
 
-part2 :: String -> Effect String
-part2 input = do
-    log "Day2 part 2 started"
-    pure $ show $ collectDiffsOfN 1 $ List.fromFoldable $ getValidBoxes input
+part2 :: Program Solution
+part2 = do
+  input <- ask
+  log' "Day2 part 2 started"
+  pure $ Just $ show $ collectDiffsOfN 1 $ List.fromFoldable $ getValidBoxes input

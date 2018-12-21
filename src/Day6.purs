@@ -2,6 +2,7 @@ module Day6 where
 
 import Prelude
 
+import Control.Monad.RWS (ask)
 import Data.Array ((..))
 import Data.Array (concat, filter, head, length) as Array
 import Data.Array.NonEmpty ((!!))
@@ -19,8 +20,7 @@ import Data.String.Regex.Flags (noFlags)
 import Data.Traversable (foldl, sequence, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Tuple (snd) as Tuple
-import Effect (Effect)
-import Util (Area, Point)
+import Util (Area, Point, Solution, Program)
 import Util (makePoint, maxValue', splitLines) as Util
 
 newtype Distance = Distance (Tuple Point Int)
@@ -120,8 +120,8 @@ solve2 input = do
   pure $ Array.length $ Array.filter (sumLt 10000) allDistances
   where sumLt i dists = (sum $ (\(Distance (Tuple _ d)) -> d) <$> dists) < i
 
-part1 :: String -> Effect String
-part1 input = pure $ show $ solve1 input
+part1 :: Program Solution
+part1 = pure <$> show <$> solve1 <$> ask
 
-part2 :: String -> Effect String
-part2 input = pure $ show $ solve2 input
+part2 :: Program Solution
+part2 = pure <$> show <$> solve2 <$> ask

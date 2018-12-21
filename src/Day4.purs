@@ -1,6 +1,8 @@
 module Day4 where
 
 import Prelude
+
+import Control.Monad.RWS (ask)
 import Data.Array ((..))
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray, index, (!!), length)
@@ -9,20 +11,19 @@ import Data.Either (hush)
 import Data.Enum (toEnum, fromEnum)
 import Data.Foldable (foldl)
 import Data.Int as Int
-import Data.List as List
 import Data.List (List(..))
-import Data.Map as Map
+import Data.List as List
 import Data.Map (Map)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (unwrap, class Newtype)
 import Data.String.Regex (Regex, regex, match)
 import Data.String.Regex.Flags (noFlags)
 import Data.Time (minute)
 import Data.Time.Duration (Minutes(..))
-import Data.Tuple (Tuple(..), fst, snd)
 import Data.Traversable (traverse)
-import Effect (Effect)
-import Util (splitLines)
+import Data.Tuple (Tuple(..), fst, snd)
+import Util (Solution, Program, splitLines)
 
 newtype Guard = Guard Int
 derive instance eqGuard :: Eq Guard
@@ -195,8 +196,8 @@ solve2 input = do
         mostTimes (Tuple _ (Tuple _ len1)) (Tuple _ (Tuple _ len2)) =
             compare len2 len1 -- reverse
 
-part1 :: String -> Effect String
-part1 = pure <<< show <<< solve1
+part1 :: Program Solution
+part1 = (pure <<< show <<< solve1) <$> ask
 
-part2 :: String -> Effect String
-part2 = pure <<< show <<< solve2
+part2 :: Program Solution
+part2 = (pure <<< show <<< solve2) <$> ask

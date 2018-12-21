@@ -2,7 +2,10 @@ module Util where
 
 import Prelude
 
+import Control.Monad.RWS (RWS, tell)
 import Data.Foldable (foldl)
+import Data.List (List)
+import Data.List (singleton) as List
 import Data.Map (Map)
 import Data.Map (toUnfoldable) as Map
 import Data.Maybe (Maybe(..))
@@ -31,3 +34,12 @@ maxValue' a = foldl gt Nothing a
     gt accM cur@(Tuple _ v2) = Just $ case accM of
       Nothing -> cur
       Just acc@(Tuple _ v1) -> if v1 > v2 then acc else cur
+
+type Input = String
+type Log = List String
+newtype ProgramState = ProgramState { }
+type Solution = Maybe String
+type Program = RWS Input Log ProgramState
+
+log' :: String -> Program Unit
+log' = tell <<< List.singleton

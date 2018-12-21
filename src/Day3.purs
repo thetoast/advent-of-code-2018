@@ -1,22 +1,23 @@
 module Day3 where
 
 import Prelude
-import Data.Array as Array
+
+import Control.Monad.RWS (ask)
 import Data.Array ((..))
+import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray, (!!))
 import Data.Either (Either(..))
 import Data.Foldable (foldl, maximum)
 import Data.Int as Int
-import Data.List as List
 import Data.List (List(..))
+import Data.List as List
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Set as Set
 import Data.Set (Set)
+import Data.Set as Set
 import Data.String.Regex (Regex, regex, match)
 import Data.String.Regex.Flags (noFlags)
 import Data.Traversable (traverse)
-import Effect (Effect)
-import Util (splitLines, Point, Size)
+import Util (Point, Size, Solution, Program, splitLines)
 
 type Claim = { id :: Int, point :: Point, size :: Size }
 type Fabric = Array (Array (List Claim))
@@ -87,8 +88,8 @@ parseClaims input = case claimRegex of
 solve1 :: Array Claim -> Int
 solve1 = Array.length <<< findOverlaps
 
-part1 :: String -> Effect String
-part1 input = pure $ show $ solve1 $ parseClaims input
+part1 :: Program Solution
+part1 = Just <$> show <$> solve1 <$> parseClaims <$> ask
 
 solve2 :: Array Claim -> Set Claim
 solve2 claims = do
@@ -96,5 +97,5 @@ solve2 claims = do
     let overlapSet = Set.fromFoldable $ overlaps
     Set.difference (Set.fromFoldable claims) overlapSet
 
-part2 :: String -> Effect String
-part2 input = pure $ show $ solve2 $ parseClaims input
+part2 :: Program Solution
+part2 = Just <$> show <$> solve2 <$> parseClaims <$> ask

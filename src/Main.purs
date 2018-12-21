@@ -1,25 +1,27 @@
 module Main where
 
 import Prelude
-import Data.Traversable (traverse)
-import Effect (Effect)
-import Effect.Console (log)
-import Foreign (unsafeFromForeign)
-import JQuery as J
 
+import Control.Monad.RWS (RWSResult(..), runRWS)
+import Data.Maybe (Maybe(..))
+import Data.Traversable (traverse)
 import Day1 as Day1
 import Day2 as Day2
 import Day3 as Day3
 import Day4 as Day4
 import Day5 as Day5
 import Day6 as Day6
+import Day7 as Day7
+import Effect (Effect)
+import Effect.Console (log)
+import Foreign (unsafeFromForeign)
+import JQuery as J
+import Util (Program, ProgramState(..), Solution)
 
-type Solution = Effect String
-type AdventFunction = String -> Solution
 type TestDay = {
     day :: Int,
-    part1 :: AdventFunction,
-    part2 :: AdventFunction
+    part1 :: Program Solution,
+    part2 :: Program Solution
 }
 
 tests :: Array TestDay
@@ -29,20 +31,21 @@ tests = [
     {day: 3, part1: Day3.part1, part2: Day3.part2},
     {day: 4, part1: Day4.part1, part2: Day4.part2},
     {day: 5, part1: Day5.part1, part2: Day5.part2},
-    {day: 6, part1: Day6.part1, part2: Day6.part2}
+    {day: 6, part1: Day6.part1, part2: Day6.part2},
+    {day: 7, part1: Day7.part1, part2: Day7.part2}
 ]
 
-runAndPrintResults :: Solution -> Effect Unit
-runAndPrintResults solution = do
-  result <- solution
-  J.setText result =<< J.select "#results"
-
-handleClick :: AdventFunction -> J.JQueryEvent -> J.JQuery -> Effect Unit
+handleClick :: Program Solution -> J.JQueryEvent -> J.JQuery -> Effect Unit
 handleClick func _ _ = do
   inputValue <- (J.select "#input" >>= J.getValue <#> unsafeFromForeign)
-  runAndPrintResults (func inputValue)
+  case runRWS func inputValue (ProgramState {}) of
+    (RWSResult _ result logs) -> do
+      _ <- traverse log logs
+      case result of
+        Just value -> J.setText value =<< J.select "#results"
+        Nothing -> J.setText "Nothing" =<< J.select "#results"
 
-createLink :: String -> AdventFunction -> Effect J.JQuery
+createLink :: String -> Program Solution -> Effect J.JQuery
 createLink name func = do
   link <- J.create "<a>"
   J.appendText name link

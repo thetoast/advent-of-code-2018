@@ -1,15 +1,15 @@
 module Test.Day3 where
 
 import Prelude
+
 import Data.Array ((:))
 import Data.Either (Either(..))
 import Data.Maybe (isJust)
 import Data.String.Regex (match)
+import Day3 (Claim, claimRegex, parseClaim, getClaimPoints, solve1)
 import Effect (Effect)
---import Effect.Console (log)
 import Test.Assert (assert')
-
-import Day3 (Claim, Point, claimRegex, parseClaim, getClaimPoints, solve1)
+import Util (Point)
 
 claimStr1 = "#1 @ 1,3: 4x4" :: String
 claimStr2 = "#2 @ 3,1: 4x4" :: String

@@ -1,15 +1,16 @@
 module Day1 where
 
 import Prelude
-import Data.Int as Int
+
+import Control.Monad.RWS (ask)
 import Data.Foldable (foldl)
+import Data.Int as Int
 import Data.Maybe (Maybe(..))
-import Data.Set as Set
 import Data.Set (Set)
-import Data.String as String
+import Data.Set as Set
 import Data.String (Pattern(..))
-import Effect (Effect)
-import Effect.Console (log)
+import Data.String as String
+import Util (Program, Solution, log')
 
 type Op = Int -> Int
 type Part2Result = { sum :: Int, prev :: Set Int, result :: Maybe Int}
@@ -49,13 +50,15 @@ solve2 acc ops = do
          Just x -> x
          Nothing -> solve2 res ops
 
-part1 :: String -> Effect String
-part1 input = do
-    log "Day 1 Part 1 started"
-    pure $ show $ solve input
+part1 :: Program Solution
+part1 = do
+  input <- ask
+  log' "Day 1 Part 1 started"
+  pure $ Just $ show $ solve input
 
-part2 :: String -> Effect String
-part2 input = do
-    log "Day 1 Part 2 started"
-    let ops = toOp <$> String.split (Pattern "\n") input
-    pure $ show $ solve2 { sum: 0, prev: Set.singleton 0, result: Nothing} ops
+part2 :: Program Solution
+part2 = do
+  input <- ask
+  log' "Day 1 Part 2 started"
+  let ops = toOp <$> String.split (Pattern "\n") input
+  pure $ Just $ show $ solve2 { sum: 0, prev: Set.singleton 0, result: Nothing} ops

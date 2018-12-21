@@ -2,6 +2,7 @@ module Day5 where
 
 import Prelude
 
+import Control.Monad.RWS (ask)
 import Data.Array ((!!))
 import Data.Array (concat, head, index, length, snoc, sort, take, takeEnd) as Array
 import Data.Either (Either(..))
@@ -11,8 +12,7 @@ import Data.String.Regex (regex, replace)
 import Data.String.Regex.Flags (global, ignoreCase)
 import Data.Traversable (sequence, traverse)
 import Data.Tuple (Tuple(..))
-import Effect (Effect)
-import Effect.Console (log)
+import Util (Program, Solution, log')
 import Util (splitChars, splitLines) as Util
 
 type Polymer = Maybe (Array String)
@@ -83,8 +83,8 @@ dropAll letter string = do
         Right pattern -> replace pattern "" string
         Left _ -> string
 
-part1 :: String -> Effect String
-part1 = pure <<< show <<< solve1
+part1 :: Program Solution
+part1 = (pure <<< show <<< solve1) <$> ask
 
 letters :: Array String
 letters = [
@@ -93,17 +93,16 @@ letters = [
     "r", "s", "t", "u", "v", "w", "x", "y", "z"
 ]
 
-solve2 :: String -> String -> Effect (Maybe Int)
+solve2 :: String -> String -> Program (Maybe Int)
 solve2 letter input = do
-    log $ "Solving for " <> letter
+    log' $ "Solving for " <> letter
     let res = solve1 $ dropAll letter input
-    log $ show res
+    log' $ show res
     pure res
 
-
-
-part2 :: String -> Effect String
-part2 input = do
-    log "Calculating stage1s"
-    res <- traverse (flip solve2 input) letters
-    pure $ show $ Array.head <$> Array.sort <$> sequence res
+part2 :: Program Solution
+part2 = do
+  log' "Calculating stage1s"
+  input <- ask
+  res <- traverse (flip solve2 input) letters
+  pure $ Just $ show $ Array.head <$> Array.sort <$> sequence res
