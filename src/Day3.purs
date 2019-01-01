@@ -17,7 +17,7 @@ import Data.Set as Set
 import Data.String.Regex (Regex, regex, match)
 import Data.String.Regex.Flags (noFlags)
 import Data.Traversable (traverse)
-import Util (Point, Size, Solution, Program, splitLines)
+import Util (MainProgram, Point, Size, splitLines)
 
 type Claim = { id :: Int, point :: Point, size :: Size }
 type Fabric = Array (Array (List Claim))
@@ -88,8 +88,8 @@ parseClaims input = case claimRegex of
 solve1 :: Array Claim -> Int
 solve1 = Array.length <<< findOverlaps
 
-part1 :: Program Solution
-part1 = Just <$> show <$> solve1 <$> parseClaims <$> ask
+part1 :: MainProgram
+part1 = show <$> solve1 <$> parseClaims <$> ask
 
 solve2 :: Array Claim -> Set Claim
 solve2 claims = do
@@ -97,5 +97,5 @@ solve2 claims = do
     let overlapSet = Set.fromFoldable $ overlaps
     Set.difference (Set.fromFoldable claims) overlapSet
 
-part2 :: Program Solution
-part2 = Just <$> show <$> solve2 <$> parseClaims <$> ask
+part2 :: MainProgram
+part2 = show <$> solve2 <$> parseClaims <$> ask

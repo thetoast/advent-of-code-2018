@@ -20,7 +20,7 @@ import Data.String.Regex.Flags (noFlags)
 import Data.Traversable (foldl, sequence, traverse)
 import Data.Tuple (Tuple(..))
 import Data.Tuple (snd) as Tuple
-import Util (Area, Point, Solution, Program)
+import Util (Area, MainProgram, Point)
 import Util (makePoint, maxValue', splitLines) as Util
 
 newtype Distance = Distance (Tuple Point Int)
@@ -120,8 +120,8 @@ solve2 input = do
   pure $ Array.length $ Array.filter (sumLt 10000) allDistances
   where sumLt i dists = (sum $ (\(Distance (Tuple _ d)) -> d) <$> dists) < i
 
-part1 :: Program Solution
-part1 = pure <$> show <$> solve1 <$> ask
+part1 :: MainProgram
+part1 = show <$> solve1 <$> ask
 
-part2 :: Program Solution
-part2 = pure <$> show <$> solve2 <$> ask
+part2 :: MainProgram
+part2 = show <$> solve2 <$> ask

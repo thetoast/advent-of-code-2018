@@ -2,6 +2,7 @@ module Day4 where
 
 import Prelude
 
+import Control.Monad.Except (throwError)
 import Control.Monad.RWS (ask)
 import Data.Array ((..))
 import Data.Array as Array
@@ -23,7 +24,7 @@ import Data.Time (minute)
 import Data.Time.Duration (Minutes(..))
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..), fst, snd)
-import Util (Solution, Program, splitLines)
+import Util (MainProgram, splitLines)
 
 newtype Guard = Guard Int
 derive instance eqGuard :: Eq Guard
@@ -196,8 +197,16 @@ solve2 input = do
         mostTimes (Tuple _ (Tuple _ len1)) (Tuple _ (Tuple _ len2)) =
             compare len2 len1 -- reverse
 
-part1 :: Program Solution
-part1 = (pure <<< show <<< solve1) <$> ask
+part1 :: MainProgram
+part1 = do
+  input <- ask
+  case solve1 input of
+    Just res -> pure $ show res
+    Nothing -> throwError ["no result"]
 
-part2 :: Program Solution
-part2 = (pure <<< show <<< solve2) <$> ask
+part2 :: MainProgram
+part2 = do
+  input <- ask
+  case solve2 input of
+    Just res -> pure $ show res
+    Nothing -> throwError ["no result"]

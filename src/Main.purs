@@ -2,9 +2,7 @@ module Main where
 
 import Prelude
 
-import Control.Monad.RWS (RWSResult(..), runRWS)
-import Data.Maybe (Maybe(..))
-import Data.Traversable (traverse)
+import Data.Traversable (traverse, traverse_)
 import Day1 as Day1
 import Day2 as Day2
 import Day3 as Day3
@@ -16,12 +14,12 @@ import Effect (Effect)
 import Effect.Console (log)
 import Foreign (unsafeFromForeign)
 import JQuery as J
-import Util (Program, ProgramState(..), Solution)
+import Util (MainProgram, ProgramResult(..), runProgram)
 
 type TestDay = {
     day :: Int,
-    part1 :: Program Solution,
-    part2 :: Program Solution
+    part1 :: MainProgram,
+    part2 :: MainProgram
 }
 
 tests :: Array TestDay
@@ -35,17 +33,19 @@ tests = [
     {day: 7, part1: Day7.part1, part2: Day7.part2}
 ]
 
-handleClick :: Program Solution -> J.JQueryEvent -> J.JQuery -> Effect Unit
+handleClick :: MainProgram -> J.JQueryEvent -> J.JQuery -> Effect Unit
 handleClick func _ _ = do
   inputValue <- (J.select "#input" >>= J.getValue <#> unsafeFromForeign)
-  case runRWS func inputValue (ProgramState {}) of
-    (RWSResult _ result logs) -> do
-      _ <- traverse log logs
-      case result of
-        Just value -> J.setText value =<< J.select "#results"
-        Nothing -> J.setText "Nothing" =<< J.select "#results"
+  res <- J.select "#results"
+  case runProgram func inputValue {} of
+    ProgramResult _ logs result -> do
+      traverse_ log logs
+      J.setText result res
+    ProgramError logs error -> do
+      traverse_ log logs
+      traverse_ (\e -> J.setText ("Error: " <> e) res) error
 
-createLink :: String -> Program Solution -> Effect J.JQuery
+createLink :: String -> MainProgram -> Effect J.JQuery
 createLink name func = do
   link <- J.create "<a>"
   J.appendText name link

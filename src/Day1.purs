@@ -2,6 +2,7 @@ module Day1 where
 
 import Prelude
 
+import Control.Monad.Except (throwError)
 import Control.Monad.RWS (ask)
 import Data.Foldable (foldl)
 import Data.Int as Int
@@ -10,26 +11,28 @@ import Data.Set (Set)
 import Data.Set as Set
 import Data.String (Pattern(..))
 import Data.String as String
-import Util (Program, Solution, log')
+import Data.Traversable (traverse)
+import Util (MainProgram, MainState, Program, log')
 
 type Op = Int -> Int
 type Part2Result = { sum :: Int, prev :: Set Int, result :: Maybe Int}
 
-toOp :: String -> Op
+toOp :: String -> Program MainState Op
 toOp input = do
     let { before, after } = String.splitAt 1 input
     let afterInt = Int.fromString after
     case afterInt of
-        Nothing -> (+) 0
-        Just x -> case before of
-            "-" -> flip (-) $ x
-            _ -> (+) x
+       Nothing -> throwError ["invalid int: " <> after]
+       Just x -> case before of
+         "-" -> pure $ flip (-) $ x
+         "+" -> pure $ (+) x
+         a -> throwError ["invalid operation: " <> a]
 
 foldOps :: Array Op -> Int
 foldOps = foldl (\acc op -> op acc) 0
 
-solve :: String -> Int
-solve input = foldOps $ toOp <$> String.split (Pattern "\n") input
+solve :: String -> Program MainState Int
+solve input = foldOps <$> (traverse toOp $ String.split (Pattern "\n") input)
 
 opAndCheck :: Part2Result -> Op -> Part2Result
 opAndCheck acc op = case acc.result of
@@ -50,15 +53,15 @@ solve2 acc ops = do
          Just x -> x
          Nothing -> solve2 res ops
 
-part1 :: Program Solution
+part1 :: MainProgram
 part1 = do
   input <- ask
   log' "Day 1 Part 1 started"
-  pure $ Just $ show $ solve input
+  show <$> solve input
 
-part2 :: Program Solution
+part2 :: MainProgram
 part2 = do
   input <- ask
   log' "Day 1 Part 2 started"
-  let ops = toOp <$> String.split (Pattern "\n") input
-  pure $ Just $ show $ solve2 { sum: 0, prev: Set.singleton 0, result: Nothing} ops
+  ops <- traverse toOp $ String.split (Pattern "\n") input
+  pure $ show $ solve2 { sum: 0, prev: Set.singleton 0, result: Nothing} ops

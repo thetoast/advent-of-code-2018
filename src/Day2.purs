@@ -12,7 +12,7 @@ import Data.Maybe (Maybe(..))
 import Data.String (Pattern(..))
 import Data.String as String
 import Data.Tuple (Tuple(..), snd)
-import Util (Program, Solution, log', splitLines)
+import Util (MainProgram, log', splitLines)
 
 type LetterDiff = Tuple String String
 type WordDiff = Tuple (Tuple String String) (Array LetterDiff)
@@ -61,14 +61,14 @@ collectDiffsOfN n words = do
     where
         lengthN diff = eq n (Array.length (snd diff))
 
-part1 :: Program Solution
+part1 :: MainProgram
 part1 = do
-  input <- ask 
+  input <- ask
   log' "Day2 part 1 started"
-  pure $ Just $ show $ getSum input
+  pure $ show $ getSum input
 
-part2 :: Program Solution
+part2 :: MainProgram
 part2 = do
   input <- ask
   log' "Day2 part 2 started"
-  pure $ Just $ show $ collectDiffsOfN 1 $ List.fromFoldable $ getValidBoxes input
+  pure $ show $ collectDiffsOfN 1 $ List.fromFoldable $ getValidBoxes input
