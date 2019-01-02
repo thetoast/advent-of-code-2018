@@ -5,15 +5,17 @@ import Prelude
 import Control.Monad.Except (throwError)
 import Control.Monad.RWS (ask, get, put, tell)
 import Data.Array.NonEmpty ((!!))
+import Data.Char (toCharCode)
 import Data.Either (fromRight)
 import Data.Foldable (foldl, intercalate)
 import Data.List (List)
 import Data.List (fromFoldable, many, uncons) as List
 import Data.Map (Map)
-import Data.Map (alter, empty, keys, member, pop, size) as Map
-import Data.Maybe (Maybe(..))
+import Data.Map (alter, delete, empty, findMin, insert, keys, member, pop, size) as Map
+import Data.Maybe (Maybe(..), fromJust)
 import Data.Set (Set)
 import Data.Set (delete, difference, empty, findMin, insert, member, singleton, size) as Set
+import Data.String.CodeUnits (toChar)
 import Data.String.Regex (Regex, match, regex)
 import Data.String.Regex.Flags (noFlags)
 import Data.Tuple (Tuple(..))
@@ -29,7 +31,10 @@ type Day7State = {
   lines :: List String,
   outs  :: NodeEdgesMap,
   ins   :: NodeEdgesMap,
-  heads :: Set Node
+  heads :: Set Node,
+  maxWorkers :: Int,
+  working :: Map Int Node,
+  time :: Int
 }
 type Day7Program = Program Day7State
 
@@ -38,7 +43,10 @@ initialState str = {
   lines: List.fromFoldable $ Util.splitLines str,
   outs: Map.empty,
   ins: Map.empty,
-  heads: Set.empty
+  heads: Set.empty,
+  maxWorkers: 5,
+  working: Map.empty,
+  time: 0
 }
 
 -- Step C must be finished before step A can begin.
@@ -116,6 +124,10 @@ removeNode state node = do
           then heads
           else Set.insert child heads
 
+nodeTime :: Node -> Int
+nodeTime node =
+  unsafePartial $ fromJust $ (toCharCode >>> flip sub 4) <$> toChar node
+
 build :: Day7Program Node
 build = do
   state@{ outs, ins, heads } <- get
@@ -130,6 +142,40 @@ build = do
       pure node
     Nothing -> throwError ["no more nodes"]
 
+work :: Day7Program Unit
+work = do
+  state@{ heads, maxWorkers, working, time } <- get
+  if Map.size working == maxWorkers
+    then throwError ["no free workers"]
+    else case Set.findMin heads of
+      Just head -> put state {
+        heads = Set.delete head heads,
+        working = Map.insert (time + (nodeTime head)) head working
+      }
+      Nothing -> throwError ["nothing to work on"]
+
+complete :: Day7Program Node
+complete = do
+  log' "Looking for work to complete"
+  state@{ heads, maxWorkers, working, time } <- get
+  if Map.size working == 0
+    then throwError ["no work in progress"]
+    else case Map.findMin working of
+      Just { key, value } -> do
+        let completedState = state { working = Map.delete key working, time = key }
+        put $ removeNode completedState value
+        log' $ "Completing " <> value
+        log' $ "Time is now " <> show key
+        pure value
+      Nothing -> throwError ["could not find min key"]
+
+buildParallel :: Day7Program Node
+buildParallel = do
+  log' "Looking for work"
+  _ <- List.many work
+  state <- get
+  log' $ "Working on " <> (show state.working)
+  complete
 
 -- Solution: BITRAQVSGUWKXYHMZPOCDLJNFE
 solve1 :: Day7Program String
@@ -150,5 +196,22 @@ part1 = do
       tell logs
       throwError errs
 
+solve2 :: Day7Program String
+solve2 = do
+  log' "Part 2 started"
+  _ <- List.many parse
+  steps <- List.many buildParallel
+  state@{ time } <- get
+  log' $ "Final state: " <> show state
+  pure $ "steps: " <> (intercalate "" steps) <> "\ntime: " <> show time
+
 part2 :: MainProgram
-part2 = pure $ "Part 2"
+part2 = do
+  input <- ask
+  case runProgram solve2 input (initialState input) of
+    ProgramResult _ logs result -> do
+      tell logs
+      pure result
+    ProgramError logs errs -> do
+      tell logs
+      throwError errs
