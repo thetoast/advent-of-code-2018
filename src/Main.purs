@@ -10,6 +10,7 @@ import Day4 as Day4
 import Day5 as Day5
 import Day6 as Day6
 import Day7 as Day7
+import Day8 as Day8
 import Effect (Effect)
 import Effect.Console (log)
 import Foreign (unsafeFromForeign)
@@ -30,7 +31,8 @@ tests = [
     {day: 4, part1: Day4.part1, part2: Day4.part2},
     {day: 5, part1: Day5.part1, part2: Day5.part2},
     {day: 6, part1: Day6.part1, part2: Day6.part2},
-    {day: 7, part1: Day7.part1, part2: Day7.part2}
+    {day: 7, part1: Day7.part1, part2: Day7.part2},
+    {day: 8, part1: Day8.part1, part2: Day8.part2}
 ]
 
 handleClick :: MainProgram -> J.JQueryEvent -> J.JQuery -> Effect Unit
@@ -40,7 +42,7 @@ handleClick func _ _ = do
   case runProgram func inputValue {} of
     ProgramResult _ logs result -> do
       traverse_ log logs
-      J.setText result res
+      J.setHtml ("<pre>" <> result <> "</pre>") res
     ProgramError logs error -> do
       traverse_ log logs
       traverse_ (\e -> J.setText ("Error: " <> e) res) error
