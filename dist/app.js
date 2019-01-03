@@ -3,6 +3,171 @@ var PS = {};
 (function(exports) {
     "use strict";
 
+  //------------------------------------------------------------------------------
+  // Array creation --------------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports.range = function (start) {
+    return function (end) {
+      var step = start > end ? -1 : 1;
+      var result = new Array(step * (end - start) + 1);
+      var i = start, n = 0;
+      while (i !== end) {
+        result[n++] = i;
+        i += step;
+      }
+      result[n] = i;
+      return result;
+    };
+  };                                                                                             
+
+  exports.fromFoldableImpl = (function () {
+    function Cons(head, tail) {
+      this.head = head;
+      this.tail = tail;
+    }
+    var emptyList = {};
+
+    function curryCons(head) {
+      return function (tail) {
+        return new Cons(head, tail);
+      };
+    }
+
+    function listToArray(list) {
+      var result = [];
+      var count = 0;
+      var xs = list;
+      while (xs !== emptyList) {
+        result[count++] = xs.head;
+        xs = xs.tail;
+      }
+      return result;
+    }
+
+    return function (foldr) {
+      return function (xs) {
+        return listToArray(foldr(curryCons)(emptyList)(xs));
+      };
+    };
+  })();
+
+  //------------------------------------------------------------------------------
+  // Array size ------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports.length = function (xs) {
+    return xs.length;
+  };
+
+  //------------------------------------------------------------------------------
+  // Indexed operations ----------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports.indexImpl = function (just) {
+    return function (nothing) {
+      return function (xs) {
+        return function (i) {
+          return i < 0 || i >= xs.length ? nothing :  just(xs[i]);
+        };
+      };
+    };
+  };
+
+  exports._updateAt = function (just) {
+    return function (nothing) {
+      return function (i) {
+        return function (a) {
+          return function (l) {
+            if (i < 0 || i >= l.length) return nothing;
+            var l1 = l.slice();
+            l1[i] = a;
+            return just(l1);
+          };
+        };
+      };
+    };
+  };
+
+  exports.concat = function (xss) {
+    if (xss.length <= 10000) {
+      // This method is faster, but it crashes on big arrays.
+      // So we use it when can and fallback to simple variant otherwise.
+      return Array.prototype.concat.apply([], xss);
+    }
+
+    var result = [];
+    for (var i = 0, l = xss.length; i < l; i++) {
+      var xs = xss[i];
+      for (var j = 0, m = xs.length; j < m; j++) {
+        result.push(xs[j]);
+      }
+    }
+    return result;
+  };
+
+  exports.filter = function (f) {
+    return function (xs) {
+      return xs.filter(f);
+    };
+  };
+
+  //------------------------------------------------------------------------------
+  // Sorting ---------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports.sortImpl = function (f) {
+    return function (l) {
+      return l.slice().sort(function (x, y) {
+        return f(x)(y);
+      });
+    };
+  };
+
+  //------------------------------------------------------------------------------
+  // Subarrays -------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports.slice = function (s) {
+    return function (e) {
+      return function (l) {
+        return l.slice(s, e);
+      };
+    };
+  };
+
+  exports.take = function (n) {
+    return function (l) {
+      return n < 1 ? [] : l.slice(0, n);
+    };
+  };
+
+  exports.drop = function (n) {
+    return function (l) {
+      return n < 1 ? l : l.slice(n);
+    };
+  };
+
+  //------------------------------------------------------------------------------
+  // Zipping ---------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports.zipWith = function (f) {
+    return function (xs) {
+      return function (ys) {
+        var l = xs.length < ys.length ? xs.length : ys.length;
+        var result = new Array(l);
+        for (var i = 0; i < l; i++) {
+          result[i] = f(xs[i])(ys[i]);
+        }
+        return result;
+      };
+    };
+  };
+})(PS["Data.Array"] = PS["Data.Array"] || {});
+(function(exports) {
+    "use strict";
+
   exports.arrayMap = function (f) {
     return function (arr) {
       var l = arr.length;
@@ -899,6 +1064,13 @@ var PS = {};
   var apply = function (dict) {
       return dict.apply;
   };
+  var applyFirst = function (dictApply) {
+      return function (a) {
+          return function (b) {
+              return apply(dictApply)(Data_Functor.map(dictApply.Functor0())(Data_Function["const"])(a))(b);
+          };
+      };
+  };
   var applySecond = function (dictApply) {
       return function (a) {
           return function (b) {
@@ -908,6 +1080,7 @@ var PS = {};
   };
   exports["Apply"] = Apply;
   exports["apply"] = apply;
+  exports["applyFirst"] = applyFirst;
   exports["applySecond"] = applySecond;
   exports["applyFn"] = applyFn;
   exports["applyArray"] = applyArray;
@@ -1056,6 +1229,75 @@ var PS = {};
   exports["Lazy"] = Lazy;
 })(PS["Control.Lazy"] = PS["Control.Lazy"] || {});
 (function(exports) {
+    "use strict";
+
+  exports.map_ = function (f) {
+    return function (a) {
+      return function () {
+        return f(a());
+      };
+    };
+  };
+
+  exports.pure_ = function (a) {
+    return function () {
+      return a;
+    };
+  };
+
+  exports.bind_ = function (a) {
+    return function (f) {
+      return function () {
+        return f(a())();
+      };
+    };
+  };
+
+  exports.run = function (f) {
+    return f();
+  };
+
+  exports["while"] = function (f) {
+    return function (a) {
+      return function () {
+        while (f()) {
+          a();
+        }
+      };
+    };
+  };
+
+  exports.new = function (val) {
+    return function () {
+      return { value: val };
+    };
+  };
+
+  exports.read = function (ref) {
+    return function () {
+      return ref.value;
+    };
+  };
+
+  exports["modify'"] = function (f) {
+    return function (ref) {
+      return function () {
+        var t = f(ref.value);
+        ref.value = t.state;
+        return t.value;
+      };
+    };
+  };
+
+  exports.write = function (a) {
+    return function (ref) {
+      return function () {
+        return ref.value = a; // eslint-disable-line no-return-assign
+      };
+    };
+  };
+})(PS["Control.Monad.ST.Internal"] = PS["Control.Monad.ST.Internal"] || {});
+(function(exports) {
   // Generated by purs version 0.12.0
   "use strict";
   var Control_Applicative = PS["Control.Applicative"];
@@ -1081,6 +1323,100 @@ var PS = {};
   exports["Monad"] = Monad;
   exports["ap"] = ap;
 })(PS["Control.Monad"] = PS["Control.Monad"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var $foreign = PS["Control.Monad.ST.Internal"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Monad = PS["Control.Monad"];
+  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Unit = PS["Data.Unit"];
+  var Partial_Unsafe = PS["Partial.Unsafe"];
+  var Prelude = PS["Prelude"];                 
+  var modify = function (f) {
+      return $foreign["modify'"](function (s) {
+          var s$prime = f(s);
+          return {
+              state: s$prime,
+              value: s$prime
+          };
+      });
+  };
+  var functorST = new Data_Functor.Functor($foreign.map_);
+  var monadST = new Control_Monad.Monad(function () {
+      return applicativeST;
+  }, function () {
+      return bindST;
+  });
+  var bindST = new Control_Bind.Bind(function () {
+      return applyST;
+  }, $foreign.bind_);
+  var applyST = new Control_Apply.Apply(function () {
+      return functorST;
+  }, Control_Monad.ap(monadST));
+  var applicativeST = new Control_Applicative.Applicative(function () {
+      return applyST;
+  }, $foreign.pure_);
+  exports["modify"] = modify;
+  exports["functorST"] = functorST;
+  exports["applyST"] = applyST;
+  exports["applicativeST"] = applicativeST;
+  exports["bindST"] = bindST;
+  exports["monadST"] = monadST;
+  exports["run"] = $foreign.run;
+  exports["while"] = $foreign["while"];
+  exports["new"] = $foreign["new"];
+  exports["read"] = $foreign.read;
+  exports["write"] = $foreign.write;
+})(PS["Control.Monad.ST.Internal"] = PS["Control.Monad.ST.Internal"] || {});
+(function(exports) {
+    "use strict";
+
+  exports.empty = function () {
+    return [];
+  };
+
+  exports.pushAll = function (as) {
+    return function (xs) {
+      return function () {
+        return xs.push.apply(xs, as);
+      };
+    };
+  };
+})(PS["Data.Array.ST"] = PS["Data.Array.ST"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Alt = PS["Control.Alt"];
+  var Control_Alternative = PS["Control.Alternative"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Monad = PS["Control.Monad"];
+  var Control_Plus = PS["Control.Plus"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Unit = PS["Data.Unit"];                 
+  var MonadZero = function (Alternative1, Monad0) {
+      this.Alternative1 = Alternative1;
+      this.Monad0 = Monad0;
+  }; 
+  var guard = function (dictMonadZero) {
+      return function (v) {
+          if (v) {
+              return Control_Applicative.pure((dictMonadZero.Alternative1()).Applicative0())(Data_Unit.unit);
+          };
+          if (!v) {
+              return Control_Plus.empty((dictMonadZero.Alternative1()).Plus1());
+          };
+          throw new Error("Failed pattern match at Control.MonadZero line 54, column 1 - line 54, column 52: " + [ v.constructor.name ]);
+      };
+  };
+  exports["MonadZero"] = MonadZero;
+  exports["guard"] = guard;
+})(PS["Control.MonadZero"] = PS["Control.MonadZero"] || {});
 (function(exports) {
     "use strict";
 
@@ -1120,65 +1456,6 @@ var PS = {};
   exports["boundedInt"] = boundedInt;
   exports["boundedChar"] = boundedChar;
 })(PS["Data.Bounded"] = PS["Data.Bounded"] || {});
-(function(exports) {
-    "use strict";
-
-  exports.foldrArray = function (f) {
-    return function (init) {
-      return function (xs) {
-        var acc = init;
-        var len = xs.length;
-        for (var i = len - 1; i >= 0; i--) {
-          acc = f(xs[i])(acc);
-        }
-        return acc;
-      };
-    };
-  };
-
-  exports.foldlArray = function (f) {
-    return function (init) {
-      return function (xs) {
-        var acc = init;
-        var len = xs.length;
-        for (var i = 0; i < len; i++) {
-          acc = f(acc)(xs[i]);
-        }
-        return acc;
-      };
-    };
-  };
-})(PS["Data.Foldable"] = PS["Data.Foldable"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Alt = PS["Control.Alt"];
-  var Control_Alternative = PS["Control.Alternative"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Monad = PS["Control.Monad"];
-  var Control_Plus = PS["Control.Plus"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Unit = PS["Data.Unit"];                 
-  var MonadZero = function (Alternative1, Monad0) {
-      this.Alternative1 = Alternative1;
-      this.Monad0 = Monad0;
-  }; 
-  var guard = function (dictMonadZero) {
-      return function (v) {
-          if (v) {
-              return Control_Applicative.pure((dictMonadZero.Alternative1()).Applicative0())(Data_Unit.unit);
-          };
-          if (!v) {
-              return Control_Plus.empty((dictMonadZero.Alternative1()).Plus1());
-          };
-          throw new Error("Failed pattern match at Control.MonadZero line 54, column 1 - line 54, column 52: " + [ v.constructor.name ]);
-      };
-  };
-  exports["MonadZero"] = MonadZero;
-  exports["guard"] = guard;
-})(PS["Control.MonadZero"] = PS["Control.MonadZero"] || {});
 (function(exports) {
     "use strict";
 
@@ -1419,6 +1696,157 @@ var PS = {};
   exports["bindMaybe"] = bindMaybe;
   exports["showMaybe"] = showMaybe;
 })(PS["Data.Maybe"] = PS["Data.Maybe"] || {});
+(function(exports) {
+    "use strict";
+
+  // module Unsafe.Coerce
+
+  exports.unsafeCoerce = function (x) {
+    return x;
+  };
+})(PS["Unsafe.Coerce"] = PS["Unsafe.Coerce"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var $foreign = PS["Unsafe.Coerce"];
+  exports["unsafeCoerce"] = $foreign.unsafeCoerce;
+})(PS["Unsafe.Coerce"] = PS["Unsafe.Coerce"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var $foreign = PS["Data.Array.ST"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Monad_ST = PS["Control.Monad.ST"];
+  var Control_Monad_ST_Internal = PS["Control.Monad.ST.Internal"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ordering = PS["Data.Ordering"];
+  var Data_Ring = PS["Data.Ring"];
+  var Prelude = PS["Prelude"];
+  var Unsafe_Coerce = PS["Unsafe.Coerce"];
+  var unsafeFreeze = function ($12) {
+      return Control_Applicative.pure(Control_Monad_ST_Internal.applicativeST)($12);
+  };
+  var push = function (a) {
+      return $foreign.pushAll([ a ]);
+  };
+  exports["push"] = push;
+  exports["unsafeFreeze"] = unsafeFreeze;
+  exports["empty"] = $foreign.empty;
+})(PS["Data.Array.ST"] = PS["Data.Array.ST"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Monad_ST = PS["Control.Monad.ST"];
+  var Control_Monad_ST_Internal = PS["Control.Monad.ST.Internal"];
+  var Control_Monad_ST_Ref = PS["Control.Monad.ST.Ref"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Array_ST = PS["Data.Array.ST"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Prelude = PS["Prelude"];                 
+  var Iterator = (function () {
+      function Iterator(value0, value1) {
+          this.value0 = value0;
+          this.value1 = value1;
+      };
+      Iterator.create = function (value0) {
+          return function (value1) {
+              return new Iterator(value0, value1);
+          };
+      };
+      return Iterator;
+  })();
+  var peek = function (v) {
+      return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal.read(v.value1))(function (v1) {
+          return Control_Applicative.pure(Control_Monad_ST_Internal.applicativeST)(v.value0(v1));
+      });
+  };
+  var next = function (v) {
+      return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal.read(v.value1))(function (v1) {
+          return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal.modify(function (v2) {
+              return v2 + 1 | 0;
+          })(v.value1))(function (v2) {
+              return Control_Applicative.pure(Control_Monad_ST_Internal.applicativeST)(v.value0(v1));
+          });
+      });
+  };
+  var pushWhile = function (p) {
+      return function (iter) {
+          return function (array) {
+              return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal["new"](false))(function (v) {
+                  return Control_Monad_ST_Internal["while"](Data_Functor.map(Control_Monad_ST_Internal.functorST)(Data_HeytingAlgebra.not(Data_HeytingAlgebra.heytingAlgebraBoolean))(Control_Monad_ST_Internal.read(v)))(Control_Bind.bind(Control_Monad_ST_Internal.bindST)(peek(iter))(function (v1) {
+                      if (v1 instanceof Data_Maybe.Just && p(v1.value0)) {
+                          return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Data_Array_ST.push(v1.value0)(array))(function (v2) {
+                              return Data_Functor["void"](Control_Monad_ST_Internal.functorST)(next(iter));
+                          });
+                      };
+                      return Data_Functor["void"](Control_Monad_ST_Internal.functorST)(Control_Monad_ST_Internal.write(true)(v));
+                  }));
+              });
+          };
+      };
+  };                                                    
+  var iterator = function (f) {
+      return Data_Functor.map(Control_Monad_ST_Internal.functorST)(Iterator.create(f))(Control_Monad_ST_Internal["new"](0));
+  };
+  var iterate = function (iter) {
+      return function (f) {
+          return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal["new"](false))(function (v) {
+              return Control_Monad_ST_Internal["while"](Data_Functor.map(Control_Monad_ST_Internal.functorST)(Data_HeytingAlgebra.not(Data_HeytingAlgebra.heytingAlgebraBoolean))(Control_Monad_ST_Internal.read(v)))(Control_Bind.bind(Control_Monad_ST_Internal.bindST)(next(iter))(function (v1) {
+                  if (v1 instanceof Data_Maybe.Just) {
+                      return f(v1.value0);
+                  };
+                  if (v1 instanceof Data_Maybe.Nothing) {
+                      return Data_Functor["void"](Control_Monad_ST_Internal.functorST)(Control_Monad_ST_Internal.write(true)(v));
+                  };
+                  throw new Error("Failed pattern match at Data.Array.ST.Iterator line 42, column 5 - line 44, column 47: " + [ v1.constructor.name ]);
+              }));
+          });
+      };
+  };
+  exports["iterator"] = iterator;
+  exports["iterate"] = iterate;
+  exports["next"] = next;
+  exports["peek"] = peek;
+  exports["pushWhile"] = pushWhile;
+})(PS["Data.Array.ST.Iterator"] = PS["Data.Array.ST.Iterator"] || {});
+(function(exports) {
+    "use strict";
+
+  exports.foldrArray = function (f) {
+    return function (init) {
+      return function (xs) {
+        var acc = init;
+        var len = xs.length;
+        for (var i = len - 1; i >= 0; i--) {
+          acc = f(xs[i])(acc);
+        }
+        return acc;
+      };
+    };
+  };
+
+  exports.foldlArray = function (f) {
+    return function (init) {
+      return function (xs) {
+        var acc = init;
+        var len = xs.length;
+        for (var i = 0; i < len; i++) {
+          acc = f(acc)(xs[i]);
+        }
+        return acc;
+      };
+    };
+  };
+})(PS["Data.Foldable"] = PS["Data.Foldable"] || {});
 (function(exports) {
   // Generated by purs version 0.12.0
   "use strict";
@@ -1710,146 +2138,6 @@ var PS = {};
 (function(exports) {
   // Generated by purs version 0.12.0
   "use strict";
-  var Control_Alt = PS["Control.Alt"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Extend = PS["Control.Extend"];
-  var Control_Monad = PS["Control.Monad"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Bifoldable = PS["Data.Bifoldable"];
-  var Data_Bifunctor = PS["Data.Bifunctor"];
-  var Data_Bitraversable = PS["Data.Bitraversable"];
-  var Data_Bounded = PS["Data.Bounded"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_Foldable = PS["Data.Foldable"];
-  var Data_FoldableWithIndex = PS["Data.FoldableWithIndex"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Functor_Invariant = PS["Data.Functor.Invariant"];
-  var Data_FunctorWithIndex = PS["Data.FunctorWithIndex"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Monoid = PS["Data.Monoid"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ordering = PS["Data.Ordering"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Show = PS["Data.Show"];
-  var Data_Traversable = PS["Data.Traversable"];
-  var Data_TraversableWithIndex = PS["Data.TraversableWithIndex"];
-  var Data_Unit = PS["Data.Unit"];
-  var Prelude = PS["Prelude"];                 
-  var Left = (function () {
-      function Left(value0) {
-          this.value0 = value0;
-      };
-      Left.create = function (value0) {
-          return new Left(value0);
-      };
-      return Left;
-  })();
-  var Right = (function () {
-      function Right(value0) {
-          this.value0 = value0;
-      };
-      Right.create = function (value0) {
-          return new Right(value0);
-      };
-      return Right;
-  })();
-  var note = function (a) {
-      return Data_Maybe.maybe(new Left(a))(Right.create);
-  };
-  var functorEither = new Data_Functor.Functor(function (f) {
-      return function (m) {
-          if (m instanceof Left) {
-              return new Left(m.value0);
-          };
-          if (m instanceof Right) {
-              return new Right(f(m.value0));
-          };
-          throw new Error("Failed pattern match at Data.Either line 38, column 8 - line 38, column 52: " + [ m.constructor.name ]);
-      };
-  });                                                                                                     
-  var fromRight = function (dictPartial) {
-      return function (v) {
-          var $__unused = function (dictPartial1) {
-              return function ($dollar71) {
-                  return $dollar71;
-              };
-          };
-          return $__unused(dictPartial)((function () {
-              if (v instanceof Right) {
-                  return v.value0;
-              };
-              throw new Error("Failed pattern match at Data.Either line 261, column 1 - line 261, column 52: " + [ v.constructor.name ]);
-          })());
-      };
-  };
-  var either = function (v) {
-      return function (v1) {
-          return function (v2) {
-              if (v2 instanceof Left) {
-                  return v(v2.value0);
-              };
-              if (v2 instanceof Right) {
-                  return v1(v2.value0);
-              };
-              throw new Error("Failed pattern match at Data.Either line 238, column 1 - line 238, column 64: " + [ v.constructor.name, v1.constructor.name, v2.constructor.name ]);
-          };
-      };
-  };
-  var hush = either(Data_Function["const"](Data_Maybe.Nothing.value))(Data_Maybe.Just.create);
-  exports["Left"] = Left;
-  exports["Right"] = Right;
-  exports["either"] = either;
-  exports["fromRight"] = fromRight;
-  exports["note"] = note;
-  exports["hush"] = hush;
-  exports["functorEither"] = functorEither;
-})(PS["Data.Either"] = PS["Data.Either"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Either = PS["Data.Either"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Unit = PS["Data.Unit"];
-  var Prelude = PS["Prelude"];                 
-  var MonadThrow = function (Monad0, throwError) {
-      this.Monad0 = Monad0;
-      this.throwError = throwError;
-  };
-  var throwError = function (dict) {
-      return dict.throwError;
-  };
-  exports["throwError"] = throwError;
-  exports["MonadThrow"] = MonadThrow;
-})(PS["Control.Monad.Error.Class"] = PS["Control.Monad.Error.Class"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Category = PS["Control.Category"];
-  var Control_Monad = PS["Control.Monad"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Functor = PS["Data.Functor"];
-  var Prelude = PS["Prelude"];                 
-  var MonadAsk = function (Monad0, ask) {
-      this.Monad0 = Monad0;
-      this.ask = ask;
-  };
-  var ask = function (dict) {
-      return dict.ask;
-  };
-  exports["ask"] = ask;
-  exports["MonadAsk"] = MonadAsk;
-})(PS["Control.Monad.Reader.Class"] = PS["Control.Monad.Reader.Class"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
   var Control_Applicative = PS["Control.Applicative"];
   var Control_Apply = PS["Control.Apply"];
   var Control_Biapplicative = PS["Control.Biapplicative"];
@@ -1932,1096 +2220,6 @@ var PS = {};
   exports["showTuple"] = showTuple;
   exports["eqTuple"] = eqTuple;
 })(PS["Data.Tuple"] = PS["Data.Tuple"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Data_Tuple = PS["Data.Tuple"];
-  var Data_Unit = PS["Data.Unit"];
-  var Prelude = PS["Prelude"];                 
-  var MonadState = function (Monad0, state) {
-      this.Monad0 = Monad0;
-      this.state = state;
-  };
-  var state = function (dict) {
-      return dict.state;
-  };
-  var put = function (dictMonadState) {
-      return function (s) {
-          return state(dictMonadState)(function (v) {
-              return new Data_Tuple.Tuple(Data_Unit.unit, s);
-          });
-      };
-  };
-  var modify_ = function (dictMonadState) {
-      return function (f) {
-          return state(dictMonadState)(function (s) {
-              return new Data_Tuple.Tuple(Data_Unit.unit, f(s));
-          });
-      };
-  };
-  var gets = function (dictMonadState) {
-      return function (f) {
-          return state(dictMonadState)(function (s) {
-              return new Data_Tuple.Tuple(f(s), s);
-          });
-      };
-  };
-  var get = function (dictMonadState) {
-      return state(dictMonadState)(function (s) {
-          return new Data_Tuple.Tuple(s, s);
-      });
-  };
-  exports["state"] = state;
-  exports["MonadState"] = MonadState;
-  exports["get"] = get;
-  exports["gets"] = gets;
-  exports["put"] = put;
-  exports["modify_"] = modify_;
-})(PS["Control.Monad.State.Class"] = PS["Control.Monad.State.Class"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Prelude = PS["Prelude"];                 
-  var MonadTrans = function (lift) {
-      this.lift = lift;
-  };
-  var lift = function (dict) {
-      return dict.lift;
-  };
-  exports["lift"] = lift;
-  exports["MonadTrans"] = MonadTrans;
-})(PS["Control.Monad.Trans.Class"] = PS["Control.Monad.Trans.Class"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Bind = PS["Control.Bind"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Tuple = PS["Data.Tuple"];
-  var Prelude = PS["Prelude"];                 
-  var MonadTell = function (Monad0, tell) {
-      this.Monad0 = Monad0;
-      this.tell = tell;
-  };
-  var tell = function (dict) {
-      return dict.tell;
-  };
-  exports["tell"] = tell;
-  exports["MonadTell"] = MonadTell;
-})(PS["Control.Monad.Writer.Class"] = PS["Control.Monad.Writer.Class"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Alt = PS["Control.Alt"];
-  var Control_Alternative = PS["Control.Alternative"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Category = PS["Control.Category"];
-  var Control_Monad = PS["Control.Monad"];
-  var Control_Monad_Cont_Class = PS["Control.Monad.Cont.Class"];
-  var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
-  var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
-  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
-  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
-  var Control_Monad_Trans_Class = PS["Control.Monad.Trans.Class"];
-  var Control_Monad_Writer_Class = PS["Control.Monad.Writer.Class"];
-  var Control_MonadPlus = PS["Control.MonadPlus"];
-  var Control_MonadZero = PS["Control.MonadZero"];
-  var Control_Plus = PS["Control.Plus"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Either = PS["Data.Either"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Monoid = PS["Data.Monoid"];
-  var Data_Newtype = PS["Data.Newtype"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Tuple = PS["Data.Tuple"];
-  var Effect_Class = PS["Effect.Class"];
-  var Prelude = PS["Prelude"];                 
-  var ExceptT = function (x) {
-      return x;
-  };
-  var runExceptT = function (v) {
-      return v;
-  };          
-  var monadTransExceptT = new Control_Monad_Trans_Class.MonadTrans(function (dictMonad) {
-      return function (m) {
-          return Control_Bind.bind(dictMonad.Bind1())(m)(function (v) {
-              return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Either.Right(v));
-          });
-      };
-  });
-  var mapExceptT = function (f) {
-      return function (v) {
-          return f(v);
-      };
-  };
-  var functorExceptT = function (dictFunctor) {
-      return new Data_Functor.Functor(function (f) {
-          return mapExceptT(Data_Functor.map(dictFunctor)(Data_Functor.map(Data_Either.functorEither)(f)));
-      });
-  };
-  var except = function (dictApplicative) {
-      return function ($96) {
-          return ExceptT(Control_Applicative.pure(dictApplicative)($96));
-      };
-  };
-  var monadExceptT = function (dictMonad) {
-      return new Control_Monad.Monad(function () {
-          return applicativeExceptT(dictMonad);
-      }, function () {
-          return bindExceptT(dictMonad);
-      });
-  };
-  var bindExceptT = function (dictMonad) {
-      return new Control_Bind.Bind(function () {
-          return applyExceptT(dictMonad);
-      }, function (v) {
-          return function (k) {
-              return Control_Bind.bind(dictMonad.Bind1())(v)(Data_Either.either(function ($97) {
-                  return Control_Applicative.pure(dictMonad.Applicative0())(Data_Either.Left.create($97));
-              })(function (a) {
-                  var v1 = k(a);
-                  return v1;
-              }));
-          };
-      });
-  };
-  var applyExceptT = function (dictMonad) {
-      return new Control_Apply.Apply(function () {
-          return functorExceptT(((dictMonad.Bind1()).Apply0()).Functor0());
-      }, Control_Monad.ap(monadExceptT(dictMonad)));
-  };
-  var applicativeExceptT = function (dictMonad) {
-      return new Control_Applicative.Applicative(function () {
-          return applyExceptT(dictMonad);
-      }, function ($98) {
-          return ExceptT(Control_Applicative.pure(dictMonad.Applicative0())(Data_Either.Right.create($98)));
-      });
-  };
-  var monadAskExceptT = function (dictMonadAsk) {
-      return new Control_Monad_Reader_Class.MonadAsk(function () {
-          return monadExceptT(dictMonadAsk.Monad0());
-      }, Control_Monad_Trans_Class.lift(monadTransExceptT)(dictMonadAsk.Monad0())(Control_Monad_Reader_Class.ask(dictMonadAsk)));
-  };
-  var monadTellExceptT = function (dictMonadTell) {
-      return new Control_Monad_Writer_Class.MonadTell(function () {
-          return monadExceptT(dictMonadTell.Monad0());
-      }, function ($101) {
-          return Control_Monad_Trans_Class.lift(monadTransExceptT)(dictMonadTell.Monad0())(Control_Monad_Writer_Class.tell(dictMonadTell)($101));
-      });
-  };
-  var monadThrowExceptT = function (dictMonad) {
-      return new Control_Monad_Error_Class.MonadThrow(function () {
-          return monadExceptT(dictMonad);
-      }, function ($102) {
-          return ExceptT(Control_Applicative.pure(dictMonad.Applicative0())(Data_Either.Left.create($102)));
-      });
-  };
-  var altExceptT = function (dictSemigroup) {
-      return function (dictMonad) {
-          return new Control_Alt.Alt(function () {
-              return functorExceptT(((dictMonad.Bind1()).Apply0()).Functor0());
-          }, function (v) {
-              return function (v1) {
-                  return Control_Bind.bind(dictMonad.Bind1())(v)(function (v2) {
-                      if (v2 instanceof Data_Either.Right) {
-                          return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Either.Right(v2.value0));
-                      };
-                      if (v2 instanceof Data_Either.Left) {
-                          return Control_Bind.bind(dictMonad.Bind1())(v1)(function (v3) {
-                              if (v3 instanceof Data_Either.Right) {
-                                  return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Either.Right(v3.value0));
-                              };
-                              if (v3 instanceof Data_Either.Left) {
-                                  return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Either.Left(Data_Semigroup.append(dictSemigroup)(v2.value0)(v3.value0)));
-                              };
-                              throw new Error("Failed pattern match at Control.Monad.Except.Trans line 86, column 9 - line 88, column 49: " + [ v3.constructor.name ]);
-                          });
-                      };
-                      throw new Error("Failed pattern match at Control.Monad.Except.Trans line 82, column 5 - line 88, column 49: " + [ v2.constructor.name ]);
-                  });
-              };
-          });
-      };
-  };
-  var plusExceptT = function (dictMonoid) {
-      return function (dictMonad) {
-          return new Control_Plus.Plus(function () {
-              return altExceptT(dictMonoid.Semigroup0())(dictMonad);
-          }, Control_Monad_Error_Class.throwError(monadThrowExceptT(dictMonad))(Data_Monoid.mempty(dictMonoid)));
-      };
-  };
-  var alternativeExceptT = function (dictMonoid) {
-      return function (dictMonad) {
-          return new Control_Alternative.Alternative(function () {
-              return applicativeExceptT(dictMonad);
-          }, function () {
-              return plusExceptT(dictMonoid)(dictMonad);
-          });
-      };
-  };
-  var monadZeroExceptT = function (dictMonoid) {
-      return function (dictMonad) {
-          return new Control_MonadZero.MonadZero(function () {
-              return alternativeExceptT(dictMonoid)(dictMonad);
-          }, function () {
-              return monadExceptT(dictMonad);
-          });
-      };
-  };
-  exports["ExceptT"] = ExceptT;
-  exports["runExceptT"] = runExceptT;
-  exports["mapExceptT"] = mapExceptT;
-  exports["except"] = except;
-  exports["functorExceptT"] = functorExceptT;
-  exports["applyExceptT"] = applyExceptT;
-  exports["applicativeExceptT"] = applicativeExceptT;
-  exports["bindExceptT"] = bindExceptT;
-  exports["monadExceptT"] = monadExceptT;
-  exports["altExceptT"] = altExceptT;
-  exports["plusExceptT"] = plusExceptT;
-  exports["alternativeExceptT"] = alternativeExceptT;
-  exports["monadZeroExceptT"] = monadZeroExceptT;
-  exports["monadTransExceptT"] = monadTransExceptT;
-  exports["monadThrowExceptT"] = monadThrowExceptT;
-  exports["monadAskExceptT"] = monadAskExceptT;
-  exports["monadTellExceptT"] = monadTellExceptT;
-})(PS["Control.Monad.Except.Trans"] = PS["Control.Monad.Except.Trans"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Alt = PS["Control.Alt"];
-  var Control_Alternative = PS["Control.Alternative"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Monad = PS["Control.Monad"];
-  var Control_Monad_Cont_Class = PS["Control.Monad.Cont.Class"];
-  var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
-  var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
-  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
-  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
-  var Control_Monad_Trans_Class = PS["Control.Monad.Trans.Class"];
-  var Control_Monad_Writer_Class = PS["Control.Monad.Writer.Class"];
-  var Control_MonadPlus = PS["Control.MonadPlus"];
-  var Control_MonadZero = PS["Control.MonadZero"];
-  var Control_Plus = PS["Control.Plus"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Distributive = PS["Data.Distributive"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Monoid = PS["Data.Monoid"];
-  var Data_Newtype = PS["Data.Newtype"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Effect_Class = PS["Effect.Class"];
-  var Prelude = PS["Prelude"];                 
-  var ReaderT = function (x) {
-      return x;
-  };
-  var runReaderT = function (v) {
-      return v;
-  }; 
-  var mapReaderT = function (f) {
-      return function (v) {
-          return function ($68) {
-              return f(v($68));
-          };
-      };
-  };
-  var functorReaderT = function (dictFunctor) {
-      return new Data_Functor.Functor(function ($69) {
-          return mapReaderT(Data_Functor.map(dictFunctor)($69));
-      });
-  };
-  var applyReaderT = function (dictApply) {
-      return new Control_Apply.Apply(function () {
-          return functorReaderT(dictApply.Functor0());
-      }, function (v) {
-          return function (v1) {
-              return function (r) {
-                  return Control_Apply.apply(dictApply)(v(r))(v1(r));
-              };
-          };
-      });
-  };
-  var bindReaderT = function (dictBind) {
-      return new Control_Bind.Bind(function () {
-          return applyReaderT(dictBind.Apply0());
-      }, function (v) {
-          return function (k) {
-              return function (r) {
-                  return Control_Bind.bind(dictBind)(v(r))(function (a) {
-                      var v1 = k(a);
-                      return v1(r);
-                  });
-              };
-          };
-      });
-  };
-  var applicativeReaderT = function (dictApplicative) {
-      return new Control_Applicative.Applicative(function () {
-          return applyReaderT(dictApplicative.Apply0());
-      }, function ($71) {
-          return ReaderT(Data_Function["const"](Control_Applicative.pure(dictApplicative)($71)));
-      });
-  };
-  var monadReaderT = function (dictMonad) {
-      return new Control_Monad.Monad(function () {
-          return applicativeReaderT(dictMonad.Applicative0());
-      }, function () {
-          return bindReaderT(dictMonad.Bind1());
-      });
-  };
-  var monadAskReaderT = function (dictMonad) {
-      return new Control_Monad_Reader_Class.MonadAsk(function () {
-          return monadReaderT(dictMonad);
-      }, Control_Applicative.pure(dictMonad.Applicative0()));
-  };
-  exports["ReaderT"] = ReaderT;
-  exports["runReaderT"] = runReaderT;
-  exports["mapReaderT"] = mapReaderT;
-  exports["functorReaderT"] = functorReaderT;
-  exports["applyReaderT"] = applyReaderT;
-  exports["applicativeReaderT"] = applicativeReaderT;
-  exports["bindReaderT"] = bindReaderT;
-  exports["monadReaderT"] = monadReaderT;
-  exports["monadAskReaderT"] = monadAskReaderT;
-})(PS["Control.Monad.Reader.Trans"] = PS["Control.Monad.Reader.Trans"] || {});
-(function(exports) {
-    "use strict";
-
-  exports.map_ = function (f) {
-    return function (a) {
-      return function () {
-        return f(a());
-      };
-    };
-  };
-
-  exports.pure_ = function (a) {
-    return function () {
-      return a;
-    };
-  };
-
-  exports.bind_ = function (a) {
-    return function (f) {
-      return function () {
-        return f(a())();
-      };
-    };
-  };
-
-  exports.run = function (f) {
-    return f();
-  };
-
-  exports["while"] = function (f) {
-    return function (a) {
-      return function () {
-        while (f()) {
-          a();
-        }
-      };
-    };
-  };
-
-  exports.new = function (val) {
-    return function () {
-      return { value: val };
-    };
-  };
-
-  exports.read = function (ref) {
-    return function () {
-      return ref.value;
-    };
-  };
-
-  exports["modify'"] = function (f) {
-    return function (ref) {
-      return function () {
-        var t = f(ref.value);
-        ref.value = t.state;
-        return t.value;
-      };
-    };
-  };
-
-  exports.write = function (a) {
-    return function (ref) {
-      return function () {
-        return ref.value = a; // eslint-disable-line no-return-assign
-      };
-    };
-  };
-})(PS["Control.Monad.ST.Internal"] = PS["Control.Monad.ST.Internal"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var $foreign = PS["Control.Monad.ST.Internal"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Monad = PS["Control.Monad"];
-  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Unit = PS["Data.Unit"];
-  var Partial_Unsafe = PS["Partial.Unsafe"];
-  var Prelude = PS["Prelude"];                 
-  var modify = function (f) {
-      return $foreign["modify'"](function (s) {
-          var s$prime = f(s);
-          return {
-              state: s$prime,
-              value: s$prime
-          };
-      });
-  };
-  var functorST = new Data_Functor.Functor($foreign.map_);
-  var monadST = new Control_Monad.Monad(function () {
-      return applicativeST;
-  }, function () {
-      return bindST;
-  });
-  var bindST = new Control_Bind.Bind(function () {
-      return applyST;
-  }, $foreign.bind_);
-  var applyST = new Control_Apply.Apply(function () {
-      return functorST;
-  }, Control_Monad.ap(monadST));
-  var applicativeST = new Control_Applicative.Applicative(function () {
-      return applyST;
-  }, $foreign.pure_);
-  exports["modify"] = modify;
-  exports["functorST"] = functorST;
-  exports["applyST"] = applyST;
-  exports["applicativeST"] = applicativeST;
-  exports["bindST"] = bindST;
-  exports["monadST"] = monadST;
-  exports["run"] = $foreign.run;
-  exports["while"] = $foreign["while"];
-  exports["new"] = $foreign["new"];
-  exports["read"] = $foreign.read;
-  exports["write"] = $foreign.write;
-})(PS["Control.Monad.ST.Internal"] = PS["Control.Monad.ST.Internal"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Alt = PS["Control.Alt"];
-  var Control_Alternative = PS["Control.Alternative"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Lazy = PS["Control.Lazy"];
-  var Control_Monad = PS["Control.Monad"];
-  var Control_Monad_Cont_Class = PS["Control.Monad.Cont.Class"];
-  var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
-  var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
-  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
-  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
-  var Control_Monad_Trans_Class = PS["Control.Monad.Trans.Class"];
-  var Control_Monad_Writer_Class = PS["Control.Monad.Writer.Class"];
-  var Control_MonadPlus = PS["Control.MonadPlus"];
-  var Control_MonadZero = PS["Control.MonadZero"];
-  var Control_Plus = PS["Control.Plus"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Newtype = PS["Data.Newtype"];
-  var Data_Tuple = PS["Data.Tuple"];
-  var Data_Unit = PS["Data.Unit"];
-  var Effect_Class = PS["Effect.Class"];
-  var Prelude = PS["Prelude"];                 
-  var StateT = function (x) {
-      return x;
-  };
-  var runStateT = function (v) {
-      return v;
-  };         
-  var monadTransStateT = new Control_Monad_Trans_Class.MonadTrans(function (dictMonad) {
-      return function (m) {
-          return function (s) {
-              return Control_Bind.bind(dictMonad.Bind1())(m)(function (v) {
-                  return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Tuple.Tuple(v, s));
-              });
-          };
-      };
-  });
-  var lazyStateT = new Control_Lazy.Lazy(function (f) {
-      return function (s) {
-          var v = f(Data_Unit.unit);
-          return v(s);
-      };
-  });
-  var functorStateT = function (dictFunctor) {
-      return new Data_Functor.Functor(function (f) {
-          return function (v) {
-              return function (s) {
-                  return Data_Functor.map(dictFunctor)(function (v1) {
-                      return new Data_Tuple.Tuple(f(v1.value0), v1.value1);
-                  })(v(s));
-              };
-          };
-      });
-  };
-  var monadStateT = function (dictMonad) {
-      return new Control_Monad.Monad(function () {
-          return applicativeStateT(dictMonad);
-      }, function () {
-          return bindStateT(dictMonad);
-      });
-  };
-  var bindStateT = function (dictMonad) {
-      return new Control_Bind.Bind(function () {
-          return applyStateT(dictMonad);
-      }, function (v) {
-          return function (f) {
-              return function (s) {
-                  return Control_Bind.bind(dictMonad.Bind1())(v(s))(function (v1) {
-                      var v3 = f(v1.value0);
-                      return v3(v1.value1);
-                  });
-              };
-          };
-      });
-  };
-  var applyStateT = function (dictMonad) {
-      return new Control_Apply.Apply(function () {
-          return functorStateT(((dictMonad.Bind1()).Apply0()).Functor0());
-      }, Control_Monad.ap(monadStateT(dictMonad)));
-  };
-  var applicativeStateT = function (dictMonad) {
-      return new Control_Applicative.Applicative(function () {
-          return applyStateT(dictMonad);
-      }, function (a) {
-          return function (s) {
-              return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Tuple.Tuple(a, s));
-          };
-      });
-  };
-  var monadAskStateT = function (dictMonadAsk) {
-      return new Control_Monad_Reader_Class.MonadAsk(function () {
-          return monadStateT(dictMonadAsk.Monad0());
-      }, Control_Monad_Trans_Class.lift(monadTransStateT)(dictMonadAsk.Monad0())(Control_Monad_Reader_Class.ask(dictMonadAsk)));
-  };
-  var monadStateStateT = function (dictMonad) {
-      return new Control_Monad_State_Class.MonadState(function () {
-          return monadStateT(dictMonad);
-      }, function (f) {
-          return StateT(function ($111) {
-              return Control_Applicative.pure(dictMonad.Applicative0())(f($111));
-          });
-      });
-  };
-  var monadTellStateT = function (dictMonadTell) {
-      return new Control_Monad_Writer_Class.MonadTell(function () {
-          return monadStateT(dictMonadTell.Monad0());
-      }, function ($112) {
-          return Control_Monad_Trans_Class.lift(monadTransStateT)(dictMonadTell.Monad0())(Control_Monad_Writer_Class.tell(dictMonadTell)($112));
-      });
-  };
-  var monadThrowStateT = function (dictMonadThrow) {
-      return new Control_Monad_Error_Class.MonadThrow(function () {
-          return monadStateT(dictMonadThrow.Monad0());
-      }, function (e) {
-          return Control_Monad_Trans_Class.lift(monadTransStateT)(dictMonadThrow.Monad0())(Control_Monad_Error_Class.throwError(dictMonadThrow)(e));
-      });
-  };
-  var altStateT = function (dictMonad) {
-      return function (dictAlt) {
-          return new Control_Alt.Alt(function () {
-              return functorStateT(dictAlt.Functor0());
-          }, function (v) {
-              return function (v1) {
-                  return function (s) {
-                      return Control_Alt.alt(dictAlt)(v(s))(v1(s));
-                  };
-              };
-          });
-      };
-  };
-  var plusStateT = function (dictMonad) {
-      return function (dictPlus) {
-          return new Control_Plus.Plus(function () {
-              return altStateT(dictMonad)(dictPlus.Alt0());
-          }, function (v) {
-              return Control_Plus.empty(dictPlus);
-          });
-      };
-  };
-  var alternativeStateT = function (dictMonad) {
-      return function (dictAlternative) {
-          return new Control_Alternative.Alternative(function () {
-              return applicativeStateT(dictMonad);
-          }, function () {
-              return plusStateT(dictMonad)(dictAlternative.Plus1());
-          });
-      };
-  };
-  var monadZeroStateT = function (dictMonadZero) {
-      return new Control_MonadZero.MonadZero(function () {
-          return alternativeStateT(dictMonadZero.Monad0())(dictMonadZero.Alternative1());
-      }, function () {
-          return monadStateT(dictMonadZero.Monad0());
-      });
-  };
-  exports["StateT"] = StateT;
-  exports["runStateT"] = runStateT;
-  exports["functorStateT"] = functorStateT;
-  exports["applyStateT"] = applyStateT;
-  exports["applicativeStateT"] = applicativeStateT;
-  exports["altStateT"] = altStateT;
-  exports["plusStateT"] = plusStateT;
-  exports["alternativeStateT"] = alternativeStateT;
-  exports["bindStateT"] = bindStateT;
-  exports["monadStateT"] = monadStateT;
-  exports["monadZeroStateT"] = monadZeroStateT;
-  exports["monadTransStateT"] = monadTransStateT;
-  exports["lazyStateT"] = lazyStateT;
-  exports["monadThrowStateT"] = monadThrowStateT;
-  exports["monadAskStateT"] = monadAskStateT;
-  exports["monadStateStateT"] = monadStateStateT;
-  exports["monadTellStateT"] = monadTellStateT;
-})(PS["Control.Monad.State.Trans"] = PS["Control.Monad.State.Trans"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Alt = PS["Control.Alt"];
-  var Control_Alternative = PS["Control.Alternative"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Monad = PS["Control.Monad"];
-  var Control_Monad_Cont_Class = PS["Control.Monad.Cont.Class"];
-  var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
-  var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
-  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
-  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
-  var Control_Monad_Trans_Class = PS["Control.Monad.Trans.Class"];
-  var Control_Monad_Writer_Class = PS["Control.Monad.Writer.Class"];
-  var Control_MonadPlus = PS["Control.MonadPlus"];
-  var Control_MonadZero = PS["Control.MonadZero"];
-  var Control_Plus = PS["Control.Plus"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Monoid = PS["Data.Monoid"];
-  var Data_Newtype = PS["Data.Newtype"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Tuple = PS["Data.Tuple"];
-  var Data_Unit = PS["Data.Unit"];
-  var Effect_Class = PS["Effect.Class"];
-  var Prelude = PS["Prelude"];                 
-  var WriterT = function (x) {
-      return x;
-  };
-  var runWriterT = function (v) {
-      return v;
-  };          
-  var monadTransWriterT = function (dictMonoid) {
-      return new Control_Monad_Trans_Class.MonadTrans(function (dictMonad) {
-          return function (m) {
-              return Control_Bind.bind(dictMonad.Bind1())(m)(function (v) {
-                  return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Tuple.Tuple(v, Data_Monoid.mempty(dictMonoid)));
-              });
-          };
-      });
-  };
-  var mapWriterT = function (f) {
-      return function (v) {
-          return f(v);
-      };
-  };
-  var functorWriterT = function (dictFunctor) {
-      return new Data_Functor.Functor(function (f) {
-          return mapWriterT(Data_Functor.map(dictFunctor)(function (v) {
-              return new Data_Tuple.Tuple(f(v.value0), v.value1);
-          }));
-      });
-  };
-  var applyWriterT = function (dictSemigroup) {
-      return function (dictApply) {
-          return new Control_Apply.Apply(function () {
-              return functorWriterT(dictApply.Functor0());
-          }, function (v) {
-              return function (v1) {
-                  var k = function (v3) {
-                      return function (v4) {
-                          return new Data_Tuple.Tuple(v3.value0(v4.value0), Data_Semigroup.append(dictSemigroup)(v3.value1)(v4.value1));
-                      };
-                  };
-                  return Control_Apply.apply(dictApply)(Data_Functor.map(dictApply.Functor0())(k)(v))(v1);
-              };
-          });
-      };
-  };
-  var bindWriterT = function (dictSemigroup) {
-      return function (dictBind) {
-          return new Control_Bind.Bind(function () {
-              return applyWriterT(dictSemigroup)(dictBind.Apply0());
-          }, function (v) {
-              return function (k) {
-                  return WriterT(Control_Bind.bind(dictBind)(v)(function (v1) {
-                      var v2 = k(v1.value0);
-                      return Data_Functor.map((dictBind.Apply0()).Functor0())(function (v3) {
-                          return new Data_Tuple.Tuple(v3.value0, Data_Semigroup.append(dictSemigroup)(v1.value1)(v3.value1));
-                      })(v2);
-                  }));
-              };
-          });
-      };
-  };
-  var applicativeWriterT = function (dictMonoid) {
-      return function (dictApplicative) {
-          return new Control_Applicative.Applicative(function () {
-              return applyWriterT(dictMonoid.Semigroup0())(dictApplicative.Apply0());
-          }, function (a) {
-              return WriterT(Control_Applicative.pure(dictApplicative)(new Data_Tuple.Tuple(a, Data_Monoid.mempty(dictMonoid))));
-          });
-      };
-  };
-  var monadWriterT = function (dictMonoid) {
-      return function (dictMonad) {
-          return new Control_Monad.Monad(function () {
-              return applicativeWriterT(dictMonoid)(dictMonad.Applicative0());
-          }, function () {
-              return bindWriterT(dictMonoid.Semigroup0())(dictMonad.Bind1());
-          });
-      };
-  };
-  var monadAskWriterT = function (dictMonoid) {
-      return function (dictMonadAsk) {
-          return new Control_Monad_Reader_Class.MonadAsk(function () {
-              return monadWriterT(dictMonoid)(dictMonadAsk.Monad0());
-          }, Control_Monad_Trans_Class.lift(monadTransWriterT(dictMonoid))(dictMonadAsk.Monad0())(Control_Monad_Reader_Class.ask(dictMonadAsk)));
-      };
-  };
-  var monadTellWriterT = function (dictMonoid) {
-      return function (dictMonad) {
-          return new Control_Monad_Writer_Class.MonadTell(function () {
-              return monadWriterT(dictMonoid)(dictMonad);
-          }, function ($124) {
-              return WriterT(Control_Applicative.pure(dictMonad.Applicative0())(Data_Tuple.Tuple.create(Data_Unit.unit)($124)));
-          });
-      };
-  };
-  exports["WriterT"] = WriterT;
-  exports["runWriterT"] = runWriterT;
-  exports["mapWriterT"] = mapWriterT;
-  exports["functorWriterT"] = functorWriterT;
-  exports["applyWriterT"] = applyWriterT;
-  exports["applicativeWriterT"] = applicativeWriterT;
-  exports["bindWriterT"] = bindWriterT;
-  exports["monadWriterT"] = monadWriterT;
-  exports["monadTransWriterT"] = monadTransWriterT;
-  exports["monadAskWriterT"] = monadAskWriterT;
-  exports["monadTellWriterT"] = monadTellWriterT;
-})(PS["Control.Monad.Writer.Trans"] = PS["Control.Monad.Writer.Trans"] || {});
-(function(exports) {
-    "use strict";
-
-  //------------------------------------------------------------------------------
-  // Array creation --------------------------------------------------------------
-  //------------------------------------------------------------------------------
-
-  exports.range = function (start) {
-    return function (end) {
-      var step = start > end ? -1 : 1;
-      var result = new Array(step * (end - start) + 1);
-      var i = start, n = 0;
-      while (i !== end) {
-        result[n++] = i;
-        i += step;
-      }
-      result[n] = i;
-      return result;
-    };
-  };                                                                                             
-
-  exports.fromFoldableImpl = (function () {
-    function Cons(head, tail) {
-      this.head = head;
-      this.tail = tail;
-    }
-    var emptyList = {};
-
-    function curryCons(head) {
-      return function (tail) {
-        return new Cons(head, tail);
-      };
-    }
-
-    function listToArray(list) {
-      var result = [];
-      var count = 0;
-      var xs = list;
-      while (xs !== emptyList) {
-        result[count++] = xs.head;
-        xs = xs.tail;
-      }
-      return result;
-    }
-
-    return function (foldr) {
-      return function (xs) {
-        return listToArray(foldr(curryCons)(emptyList)(xs));
-      };
-    };
-  })();
-
-  //------------------------------------------------------------------------------
-  // Array size ------------------------------------------------------------------
-  //------------------------------------------------------------------------------
-
-  exports.length = function (xs) {
-    return xs.length;
-  };
-
-  //------------------------------------------------------------------------------
-  // Indexed operations ----------------------------------------------------------
-  //------------------------------------------------------------------------------
-
-  exports.indexImpl = function (just) {
-    return function (nothing) {
-      return function (xs) {
-        return function (i) {
-          return i < 0 || i >= xs.length ? nothing :  just(xs[i]);
-        };
-      };
-    };
-  };
-
-  exports._updateAt = function (just) {
-    return function (nothing) {
-      return function (i) {
-        return function (a) {
-          return function (l) {
-            if (i < 0 || i >= l.length) return nothing;
-            var l1 = l.slice();
-            l1[i] = a;
-            return just(l1);
-          };
-        };
-      };
-    };
-  };
-
-  exports.concat = function (xss) {
-    if (xss.length <= 10000) {
-      // This method is faster, but it crashes on big arrays.
-      // So we use it when can and fallback to simple variant otherwise.
-      return Array.prototype.concat.apply([], xss);
-    }
-
-    var result = [];
-    for (var i = 0, l = xss.length; i < l; i++) {
-      var xs = xss[i];
-      for (var j = 0, m = xs.length; j < m; j++) {
-        result.push(xs[j]);
-      }
-    }
-    return result;
-  };
-
-  exports.filter = function (f) {
-    return function (xs) {
-      return xs.filter(f);
-    };
-  };
-
-  //------------------------------------------------------------------------------
-  // Sorting ---------------------------------------------------------------------
-  //------------------------------------------------------------------------------
-
-  exports.sortImpl = function (f) {
-    return function (l) {
-      return l.slice().sort(function (x, y) {
-        return f(x)(y);
-      });
-    };
-  };
-
-  //------------------------------------------------------------------------------
-  // Subarrays -------------------------------------------------------------------
-  //------------------------------------------------------------------------------
-
-  exports.slice = function (s) {
-    return function (e) {
-      return function (l) {
-        return l.slice(s, e);
-      };
-    };
-  };
-
-  exports.take = function (n) {
-    return function (l) {
-      return n < 1 ? [] : l.slice(0, n);
-    };
-  };
-
-  exports.drop = function (n) {
-    return function (l) {
-      return n < 1 ? l : l.slice(n);
-    };
-  };
-
-  //------------------------------------------------------------------------------
-  // Zipping ---------------------------------------------------------------------
-  //------------------------------------------------------------------------------
-
-  exports.zipWith = function (f) {
-    return function (xs) {
-      return function (ys) {
-        var l = xs.length < ys.length ? xs.length : ys.length;
-        var result = new Array(l);
-        for (var i = 0; i < l; i++) {
-          result[i] = f(xs[i])(ys[i]);
-        }
-        return result;
-      };
-    };
-  };
-})(PS["Data.Array"] = PS["Data.Array"] || {});
-(function(exports) {
-    "use strict";
-
-  exports.empty = function () {
-    return [];
-  };
-
-  exports.pushAll = function (as) {
-    return function (xs) {
-      return function () {
-        return xs.push.apply(xs, as);
-      };
-    };
-  };
-})(PS["Data.Array.ST"] = PS["Data.Array.ST"] || {});
-(function(exports) {
-    "use strict";
-
-  // module Unsafe.Coerce
-
-  exports.unsafeCoerce = function (x) {
-    return x;
-  };
-})(PS["Unsafe.Coerce"] = PS["Unsafe.Coerce"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var $foreign = PS["Unsafe.Coerce"];
-  exports["unsafeCoerce"] = $foreign.unsafeCoerce;
-})(PS["Unsafe.Coerce"] = PS["Unsafe.Coerce"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var $foreign = PS["Data.Array.ST"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Monad_ST = PS["Control.Monad.ST"];
-  var Control_Monad_ST_Internal = PS["Control.Monad.ST.Internal"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ordering = PS["Data.Ordering"];
-  var Data_Ring = PS["Data.Ring"];
-  var Prelude = PS["Prelude"];
-  var Unsafe_Coerce = PS["Unsafe.Coerce"];
-  var unsafeFreeze = function ($12) {
-      return Control_Applicative.pure(Control_Monad_ST_Internal.applicativeST)($12);
-  };
-  var push = function (a) {
-      return $foreign.pushAll([ a ]);
-  };
-  exports["push"] = push;
-  exports["unsafeFreeze"] = unsafeFreeze;
-  exports["empty"] = $foreign.empty;
-})(PS["Data.Array.ST"] = PS["Data.Array.ST"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Monad_ST = PS["Control.Monad.ST"];
-  var Control_Monad_ST_Internal = PS["Control.Monad.ST.Internal"];
-  var Control_Monad_ST_Ref = PS["Control.Monad.ST.Ref"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Array_ST = PS["Data.Array.ST"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Prelude = PS["Prelude"];                 
-  var Iterator = (function () {
-      function Iterator(value0, value1) {
-          this.value0 = value0;
-          this.value1 = value1;
-      };
-      Iterator.create = function (value0) {
-          return function (value1) {
-              return new Iterator(value0, value1);
-          };
-      };
-      return Iterator;
-  })();
-  var peek = function (v) {
-      return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal.read(v.value1))(function (v1) {
-          return Control_Applicative.pure(Control_Monad_ST_Internal.applicativeST)(v.value0(v1));
-      });
-  };
-  var next = function (v) {
-      return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal.read(v.value1))(function (v1) {
-          return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal.modify(function (v2) {
-              return v2 + 1 | 0;
-          })(v.value1))(function (v2) {
-              return Control_Applicative.pure(Control_Monad_ST_Internal.applicativeST)(v.value0(v1));
-          });
-      });
-  };
-  var pushWhile = function (p) {
-      return function (iter) {
-          return function (array) {
-              return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal["new"](false))(function (v) {
-                  return Control_Monad_ST_Internal["while"](Data_Functor.map(Control_Monad_ST_Internal.functorST)(Data_HeytingAlgebra.not(Data_HeytingAlgebra.heytingAlgebraBoolean))(Control_Monad_ST_Internal.read(v)))(Control_Bind.bind(Control_Monad_ST_Internal.bindST)(peek(iter))(function (v1) {
-                      if (v1 instanceof Data_Maybe.Just && p(v1.value0)) {
-                          return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Data_Array_ST.push(v1.value0)(array))(function (v2) {
-                              return Data_Functor["void"](Control_Monad_ST_Internal.functorST)(next(iter));
-                          });
-                      };
-                      return Data_Functor["void"](Control_Monad_ST_Internal.functorST)(Control_Monad_ST_Internal.write(true)(v));
-                  }));
-              });
-          };
-      };
-  };                                                    
-  var iterator = function (f) {
-      return Data_Functor.map(Control_Monad_ST_Internal.functorST)(Iterator.create(f))(Control_Monad_ST_Internal["new"](0));
-  };
-  var iterate = function (iter) {
-      return function (f) {
-          return Control_Bind.bind(Control_Monad_ST_Internal.bindST)(Control_Monad_ST_Internal["new"](false))(function (v) {
-              return Control_Monad_ST_Internal["while"](Data_Functor.map(Control_Monad_ST_Internal.functorST)(Data_HeytingAlgebra.not(Data_HeytingAlgebra.heytingAlgebraBoolean))(Control_Monad_ST_Internal.read(v)))(Control_Bind.bind(Control_Monad_ST_Internal.bindST)(next(iter))(function (v1) {
-                  if (v1 instanceof Data_Maybe.Just) {
-                      return f(v1.value0);
-                  };
-                  if (v1 instanceof Data_Maybe.Nothing) {
-                      return Data_Functor["void"](Control_Monad_ST_Internal.functorST)(Control_Monad_ST_Internal.write(true)(v));
-                  };
-                  throw new Error("Failed pattern match at Data.Array.ST.Iterator line 42, column 5 - line 44, column 47: " + [ v1.constructor.name ]);
-              }));
-          });
-      };
-  };
-  exports["iterator"] = iterator;
-  exports["iterate"] = iterate;
-  exports["next"] = next;
-  exports["peek"] = peek;
-  exports["pushWhile"] = pushWhile;
-})(PS["Data.Array.ST.Iterator"] = PS["Data.Array.ST.Iterator"] || {});
 (function(exports) {
     "use strict";
 
@@ -3265,1290 +2463,6 @@ var PS = {};
   exports["take"] = $foreign.take;
   exports["drop"] = $foreign.drop;
 })(PS["Data.Array"] = PS["Data.Array"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Alternative = PS["Control.Alternative"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Lazy = PS["Control.Lazy"];
-  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Array = PS["Data.Array"];
-  var Data_Array_NonEmpty_Internal = PS["Data.Array.NonEmpty.Internal"];
-  var Data_Bifunctor = PS["Data.Bifunctor"];
-  var Data_Boolean = PS["Data.Boolean"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_Foldable = PS["Data.Foldable"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_NonEmpty = PS["Data.NonEmpty"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ring = PS["Data.Ring"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Semigroup_Foldable = PS["Data.Semigroup.Foldable"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Data_Tuple = PS["Data.Tuple"];
-  var Data_Unfoldable = PS["Data.Unfoldable"];
-  var Data_Unfoldable1 = PS["Data.Unfoldable1"];
-  var Partial_Unsafe = PS["Partial.Unsafe"];
-  var Prelude = PS["Prelude"];
-  var Unsafe_Coerce = PS["Unsafe.Coerce"];         
-  var toArray = Unsafe_Coerce.unsafeCoerce;  
-  var adaptAny = function (f) {
-      return function ($54) {
-          return f(toArray($54));
-      };
-  };
-  var index = adaptAny(Data_Array.index);
-  var length = adaptAny(Data_Array.length);
-  exports["toArray"] = toArray;
-  exports["length"] = length;
-  exports["index"] = index;
-})(PS["Data.Array.NonEmpty"] = PS["Data.Array.NonEmpty"] || {});
-(function(exports) {
-    "use strict";
-
-  exports.toCharCode = function (c) {
-    return c.charCodeAt(0);
-  };
-
-  exports.fromCharCode = function (c) {
-    return String.fromCharCode(c);
-  };
-})(PS["Data.Enum"] = PS["Data.Enum"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var $foreign = PS["Data.Enum"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_MonadPlus = PS["Control.MonadPlus"];
-  var Control_MonadZero = PS["Control.MonadZero"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Boolean = PS["Data.Boolean"];
-  var Data_Bounded = PS["Data.Bounded"];
-  var Data_Either = PS["Data.Either"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Newtype = PS["Data.Newtype"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ordering = PS["Data.Ordering"];
-  var Data_Ring = PS["Data.Ring"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Data_Show = PS["Data.Show"];
-  var Data_Tuple = PS["Data.Tuple"];
-  var Data_Unfoldable = PS["Data.Unfoldable"];
-  var Data_Unfoldable1 = PS["Data.Unfoldable1"];
-  var Data_Unit = PS["Data.Unit"];
-  var Partial_Unsafe = PS["Partial.Unsafe"];
-  var Prelude = PS["Prelude"];
-  var Enum = function (Ord0, pred, succ) {
-      this.Ord0 = Ord0;
-      this.pred = pred;
-      this.succ = succ;
-  };
-  var BoundedEnum = function (Bounded0, Enum1, cardinality, fromEnum, toEnum) {
-      this.Bounded0 = Bounded0;
-      this.Enum1 = Enum1;
-      this.cardinality = cardinality;
-      this.fromEnum = fromEnum;
-      this.toEnum = toEnum;
-  };
-  var toEnum = function (dict) {
-      return dict.toEnum;
-  };
-  var succ = function (dict) {
-      return dict.succ;
-  }; 
-  var pred = function (dict) {
-      return dict.pred;
-  };              
-  var fromEnum = function (dict) {
-      return dict.fromEnum;
-  };
-  var toEnumWithDefaults = function (dictBoundedEnum) {
-      return function (low) {
-          return function (high) {
-              return function (x) {
-                  var v = toEnum(dictBoundedEnum)(x);
-                  if (v instanceof Data_Maybe.Just) {
-                      return v.value0;
-                  };
-                  if (v instanceof Data_Maybe.Nothing) {
-                      var $51 = x < fromEnum(dictBoundedEnum)(Data_Bounded.bottom(dictBoundedEnum.Bounded0()));
-                      if ($51) {
-                          return low;
-                      };
-                      return high;
-                  };
-                  throw new Error("Failed pattern match at Data.Enum line 158, column 33 - line 160, column 62: " + [ v.constructor.name ]);
-              };
-          };
-      };
-  };
-  var defaultSucc = function (toEnum$prime) {
-      return function (fromEnum$prime) {
-          return function (a) {
-              return toEnum$prime(fromEnum$prime(a) + 1 | 0);
-          };
-      };
-  };
-  var defaultPred = function (toEnum$prime) {
-      return function (fromEnum$prime) {
-          return function (a) {
-              return toEnum$prime(fromEnum$prime(a) - 1 | 0);
-          };
-      };
-  };
-  var charToEnum = function (v) {
-      if (v >= Data_Bounded.bottom(Data_Bounded.boundedInt) && v <= Data_Bounded.top(Data_Bounded.boundedInt)) {
-          return new Data_Maybe.Just($foreign.fromCharCode(v));
-      };
-      return Data_Maybe.Nothing.value;
-  };
-  var enumChar = new Enum(function () {
-      return Data_Ord.ordChar;
-  }, defaultPred(charToEnum)($foreign.toCharCode), defaultSucc(charToEnum)($foreign.toCharCode));
-  var cardinality = function (dict) {
-      return dict.cardinality;
-  }; 
-  var boundedEnumChar = new BoundedEnum(function () {
-      return Data_Bounded.boundedChar;
-  }, function () {
-      return enumChar;
-  }, $foreign.toCharCode(Data_Bounded.top(Data_Bounded.boundedChar)) - $foreign.toCharCode(Data_Bounded.bottom(Data_Bounded.boundedChar)) | 0, $foreign.toCharCode, charToEnum);
-  exports["Enum"] = Enum;
-  exports["succ"] = succ;
-  exports["pred"] = pred;
-  exports["BoundedEnum"] = BoundedEnum;
-  exports["cardinality"] = cardinality;
-  exports["toEnum"] = toEnum;
-  exports["fromEnum"] = fromEnum;
-  exports["toEnumWithDefaults"] = toEnumWithDefaults;
-  exports["defaultSucc"] = defaultSucc;
-  exports["defaultPred"] = defaultPred;
-  exports["enumChar"] = enumChar;
-  exports["boundedEnumChar"] = boundedEnumChar;
-})(PS["Data.Enum"] = PS["Data.Enum"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Data_Enum = PS["Data.Enum"];
-  var Data_Maybe = PS["Data.Maybe"];                 
-  var toCharCode = Data_Enum.fromEnum(Data_Enum.boundedEnumChar);
-  exports["toCharCode"] = toCharCode;
-})(PS["Data.Char"] = PS["Data.Char"] || {});
-(function(exports) {
-    "use strict";
-
-  var createDate = function (y, m, d) {
-    var date = new Date(Date.UTC(y, m, d));
-    if (y >= 0 && y < 100) {
-      date.setUTCFullYear(y);
-    }
-    return date;
-  };
-
-  exports.canonicalDateImpl = function (ctor, y, m, d) {
-    var date = createDate(y, m - 1, d);
-    return ctor(date.getUTCFullYear())(date.getUTCMonth() + 1)(date.getUTCDate());
-  };
-})(PS["Data.Date"] = PS["Data.Date"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Boolean = PS["Data.Boolean"];
-  var Data_Bounded = PS["Data.Bounded"];
-  var Data_Enum = PS["Data.Enum"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ordering = PS["Data.Ordering"];
-  var Data_Ring = PS["Data.Ring"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Data_Show = PS["Data.Show"];
-  var Prelude = PS["Prelude"];
-  var January = (function () {
-      function January() {
-
-      };
-      January.value = new January();
-      return January;
-  })();
-  var February = (function () {
-      function February() {
-
-      };
-      February.value = new February();
-      return February;
-  })();
-  var March = (function () {
-      function March() {
-
-      };
-      March.value = new March();
-      return March;
-  })();
-  var April = (function () {
-      function April() {
-
-      };
-      April.value = new April();
-      return April;
-  })();
-  var May = (function () {
-      function May() {
-
-      };
-      May.value = new May();
-      return May;
-  })();
-  var June = (function () {
-      function June() {
-
-      };
-      June.value = new June();
-      return June;
-  })();
-  var July = (function () {
-      function July() {
-
-      };
-      July.value = new July();
-      return July;
-  })();
-  var August = (function () {
-      function August() {
-
-      };
-      August.value = new August();
-      return August;
-  })();
-  var September = (function () {
-      function September() {
-
-      };
-      September.value = new September();
-      return September;
-  })();
-  var October = (function () {
-      function October() {
-
-      };
-      October.value = new October();
-      return October;
-  })();
-  var November = (function () {
-      function November() {
-
-      };
-      November.value = new November();
-      return November;
-  })();
-  var December = (function () {
-      function December() {
-
-      };
-      December.value = new December();
-      return December;
-  })();
-  var ordYear = Data_Ord.ordInt;
-  var ordDay = Data_Ord.ordInt;
-  var eqYear = Data_Eq.eqInt;
-  var eqMonth = new Data_Eq.Eq(function (x) {
-      return function (y) {
-          if (x instanceof January && y instanceof January) {
-              return true;
-          };
-          if (x instanceof February && y instanceof February) {
-              return true;
-          };
-          if (x instanceof March && y instanceof March) {
-              return true;
-          };
-          if (x instanceof April && y instanceof April) {
-              return true;
-          };
-          if (x instanceof May && y instanceof May) {
-              return true;
-          };
-          if (x instanceof June && y instanceof June) {
-              return true;
-          };
-          if (x instanceof July && y instanceof July) {
-              return true;
-          };
-          if (x instanceof August && y instanceof August) {
-              return true;
-          };
-          if (x instanceof September && y instanceof September) {
-              return true;
-          };
-          if (x instanceof October && y instanceof October) {
-              return true;
-          };
-          if (x instanceof November && y instanceof November) {
-              return true;
-          };
-          if (x instanceof December && y instanceof December) {
-              return true;
-          };
-          return false;
-      };
-  });
-  var ordMonth = new Data_Ord.Ord(function () {
-      return eqMonth;
-  }, function (x) {
-      return function (y) {
-          if (x instanceof January && y instanceof January) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof January) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof January) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof February && y instanceof February) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof February) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof February) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof March && y instanceof March) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof March) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof March) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof April && y instanceof April) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof April) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof April) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof May && y instanceof May) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof May) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof May) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof June && y instanceof June) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof June) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof June) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof July && y instanceof July) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof July) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof July) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof August && y instanceof August) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof August) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof August) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof September && y instanceof September) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof September) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof September) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof October && y instanceof October) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof October) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof October) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof November && y instanceof November) {
-              return Data_Ordering.EQ.value;
-          };
-          if (x instanceof November) {
-              return Data_Ordering.LT.value;
-          };
-          if (y instanceof November) {
-              return Data_Ordering.GT.value;
-          };
-          if (x instanceof December && y instanceof December) {
-              return Data_Ordering.EQ.value;
-          };
-          throw new Error("Failed pattern match at Data.Date.Component line 61, column 8 - line 61, column 38: " + [ x.constructor.name, y.constructor.name ]);
-      };
-  });
-  var eqDay = Data_Eq.eqInt;
-  var boundedYear = new Data_Bounded.Bounded(function () {
-      return ordYear;
-  }, -271820 | 0, 275759);       
-  var boundedMonth = new Data_Bounded.Bounded(function () {
-      return ordMonth;
-  }, January.value, December.value);
-  var boundedEnumYear = new Data_Enum.BoundedEnum(function () {
-      return boundedYear;
-  }, function () {
-      return enumYear;
-  }, 547580, function (v) {
-      return v;
-  }, function (n) {
-      if (n >= (-271821 | 0) && n <= 275759) {
-          return new Data_Maybe.Just(n);
-      };
-      if (Data_Boolean.otherwise) {
-          return Data_Maybe.Nothing.value;
-      };
-      throw new Error("Failed pattern match at Data.Date.Component line 35, column 1 - line 35, column 45: " + [ n.constructor.name ]);
-  });
-  var enumYear = new Data_Enum.Enum(function () {
-      return ordYear;
-  }, function ($46) {
-      return Data_Enum.toEnum(boundedEnumYear)((function (v) {
-          return v - 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumYear)($46)));
-  }, function ($47) {
-      return Data_Enum.toEnum(boundedEnumYear)((function (v) {
-          return v + 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumYear)($47)));
-  });
-  var boundedEnumMonth = new Data_Enum.BoundedEnum(function () {
-      return boundedMonth;
-  }, function () {
-      return enumMonth;
-  }, 12, function (v) {
-      if (v instanceof January) {
-          return 1;
-      };
-      if (v instanceof February) {
-          return 2;
-      };
-      if (v instanceof March) {
-          return 3;
-      };
-      if (v instanceof April) {
-          return 4;
-      };
-      if (v instanceof May) {
-          return 5;
-      };
-      if (v instanceof June) {
-          return 6;
-      };
-      if (v instanceof July) {
-          return 7;
-      };
-      if (v instanceof August) {
-          return 8;
-      };
-      if (v instanceof September) {
-          return 9;
-      };
-      if (v instanceof October) {
-          return 10;
-      };
-      if (v instanceof November) {
-          return 11;
-      };
-      if (v instanceof December) {
-          return 12;
-      };
-      throw new Error("Failed pattern match at Data.Date.Component line 87, column 14 - line 101, column 1: " + [ v.constructor.name ]);
-  }, function (v) {
-      if (v === 1) {
-          return new Data_Maybe.Just(January.value);
-      };
-      if (v === 2) {
-          return new Data_Maybe.Just(February.value);
-      };
-      if (v === 3) {
-          return new Data_Maybe.Just(March.value);
-      };
-      if (v === 4) {
-          return new Data_Maybe.Just(April.value);
-      };
-      if (v === 5) {
-          return new Data_Maybe.Just(May.value);
-      };
-      if (v === 6) {
-          return new Data_Maybe.Just(June.value);
-      };
-      if (v === 7) {
-          return new Data_Maybe.Just(July.value);
-      };
-      if (v === 8) {
-          return new Data_Maybe.Just(August.value);
-      };
-      if (v === 9) {
-          return new Data_Maybe.Just(September.value);
-      };
-      if (v === 10) {
-          return new Data_Maybe.Just(October.value);
-      };
-      if (v === 11) {
-          return new Data_Maybe.Just(November.value);
-      };
-      if (v === 12) {
-          return new Data_Maybe.Just(December.value);
-      };
-      return Data_Maybe.Nothing.value;
-  });
-  var enumMonth = new Data_Enum.Enum(function () {
-      return ordMonth;
-  }, function ($50) {
-      return Data_Enum.toEnum(boundedEnumMonth)((function (v) {
-          return v - 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumMonth)($50)));
-  }, function ($51) {
-      return Data_Enum.toEnum(boundedEnumMonth)((function (v) {
-          return v + 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumMonth)($51)));
-  });
-  var boundedDay = new Data_Bounded.Bounded(function () {
-      return ordDay;
-  }, 1, 31);
-  var boundedEnumDay = new Data_Enum.BoundedEnum(function () {
-      return boundedDay;
-  }, function () {
-      return enumDay;
-  }, 31, function (v) {
-      return v;
-  }, function (n) {
-      if (n >= 1 && n <= 31) {
-          return new Data_Maybe.Just(n);
-      };
-      if (Data_Boolean.otherwise) {
-          return Data_Maybe.Nothing.value;
-      };
-      throw new Error("Failed pattern match at Data.Date.Component line 133, column 1 - line 133, column 43: " + [ n.constructor.name ]);
-  });
-  var enumDay = new Data_Enum.Enum(function () {
-      return ordDay;
-  }, function ($52) {
-      return Data_Enum.toEnum(boundedEnumDay)((function (v) {
-          return v - 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumDay)($52)));
-  }, function ($53) {
-      return Data_Enum.toEnum(boundedEnumDay)((function (v) {
-          return v + 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumDay)($53)));
-  });
-  exports["January"] = January;
-  exports["February"] = February;
-  exports["March"] = March;
-  exports["April"] = April;
-  exports["May"] = May;
-  exports["June"] = June;
-  exports["July"] = July;
-  exports["August"] = August;
-  exports["September"] = September;
-  exports["October"] = October;
-  exports["November"] = November;
-  exports["December"] = December;
-  exports["eqYear"] = eqYear;
-  exports["ordYear"] = ordYear;
-  exports["boundedYear"] = boundedYear;
-  exports["enumYear"] = enumYear;
-  exports["boundedEnumYear"] = boundedEnumYear;
-  exports["eqMonth"] = eqMonth;
-  exports["ordMonth"] = ordMonth;
-  exports["boundedMonth"] = boundedMonth;
-  exports["enumMonth"] = enumMonth;
-  exports["boundedEnumMonth"] = boundedEnumMonth;
-  exports["eqDay"] = eqDay;
-  exports["ordDay"] = ordDay;
-  exports["boundedDay"] = boundedDay;
-  exports["enumDay"] = enumDay;
-  exports["boundedEnumDay"] = boundedEnumDay;
-})(PS["Data.Date.Component"] = PS["Data.Date.Component"] || {});
-(function(exports) {
-    "use strict";
-
-  exports.fromStringAsImpl = function (just) {
-    return function (nothing) {
-      return function (radix) {
-        var digits;
-        if (radix < 11) {
-          digits = "[0-" + (radix - 1).toString() + "]";
-        } else if (radix === 11) {
-          digits = "[0-9a]";
-        } else {
-          digits = "[0-9a-" + String.fromCharCode(86 + radix) + "]";
-        }
-        var pattern = new RegExp("^[\\+\\-]?" + digits + "+$", "i");
-
-        return function (s) {
-          /* jshint bitwise: false */
-          if (pattern.test(s)) {
-            var i = parseInt(s, radix);
-            return (i | 0) === i ? just(i) : nothing;
-          } else {
-            return nothing;
-          }
-        };
-      };
-    };
-  };
-})(PS["Data.Int"] = PS["Data.Int"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var $foreign = PS["Data.Int"];
-  var Control_Category = PS["Control.Category"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Boolean = PS["Data.Boolean"];
-  var Data_Bounded = PS["Data.Bounded"];
-  var Data_CommutativeRing = PS["Data.CommutativeRing"];
-  var Data_DivisionRing = PS["Data.DivisionRing"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_EuclideanRing = PS["Data.EuclideanRing"];
-  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
-  var Data_Int_Bits = PS["Data.Int.Bits"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ordering = PS["Data.Ordering"];
-  var Data_Ring = PS["Data.Ring"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Data_Show = PS["Data.Show"];
-  var Global = PS["Global"];
-  var $$Math = PS["Math"];
-  var Prelude = PS["Prelude"];
-  var fromStringAs = $foreign.fromStringAsImpl(Data_Maybe.Just.create)(Data_Maybe.Nothing.value);
-  var fromString = fromStringAs(10);
-  exports["fromString"] = fromString;
-  exports["fromStringAs"] = fromStringAs;
-})(PS["Data.Int"] = PS["Data.Int"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Category = PS["Control.Category"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_EuclideanRing = PS["Data.EuclideanRing"];
-  var Data_Monoid = PS["Data.Monoid"];
-  var Data_Newtype = PS["Data.Newtype"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ring = PS["Data.Ring"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Data_Show = PS["Data.Show"];
-  var Prelude = PS["Prelude"];
-  var Minutes = function (x) {
-      return x;
-  };
-  var Milliseconds = function (x) {
-      return x;
-  };
-  var Duration = function (fromDuration, toDuration) {
-      this.fromDuration = fromDuration;
-      this.toDuration = toDuration;
-  };
-  var toDuration = function (dict) {
-      return dict.toDuration;
-  };          
-  var newtypeMinutes = new Data_Newtype.Newtype(function (n) {
-      return n;
-  }, Minutes);
-  var newtypeMilliseconds = new Data_Newtype.Newtype(function (n) {
-      return n;
-  }, Milliseconds);
-  var fromDuration = function (dict) {
-      return dict.fromDuration;
-  };  
-  var durationMinutes = new Duration(Data_Newtype.over(newtypeMinutes)(newtypeMilliseconds)(Minutes)(function (v) {
-      return v * 60000.0;
-  }), Data_Newtype.over(newtypeMilliseconds)(newtypeMinutes)(Milliseconds)(function (v) {
-      return v / 60000.0;
-  }));
-  exports["fromDuration"] = fromDuration;
-  exports["toDuration"] = toDuration;
-  exports["Milliseconds"] = Milliseconds;
-  exports["Minutes"] = Minutes;
-  exports["Duration"] = Duration;
-  exports["newtypeMilliseconds"] = newtypeMilliseconds;
-  exports["newtypeMinutes"] = newtypeMinutes;
-  exports["durationMinutes"] = durationMinutes;
-})(PS["Data.Time.Duration"] = PS["Data.Time.Duration"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var $foreign = PS["Data.Date"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Boolean = PS["Data.Boolean"];
-  var Data_Bounded = PS["Data.Bounded"];
-  var Data_Date_Component = PS["Data.Date.Component"];
-  var Data_Enum = PS["Data.Enum"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_EuclideanRing = PS["Data.EuclideanRing"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Function_Uncurried = PS["Data.Function.Uncurried"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
-  var Data_Int = PS["Data.Int"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ordering = PS["Data.Ordering"];
-  var Data_Ring = PS["Data.Ring"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Data_Show = PS["Data.Show"];
-  var Data_Time_Duration = PS["Data.Time.Duration"];
-  var Partial_Unsafe = PS["Partial.Unsafe"];
-  var Prelude = PS["Prelude"];                 
-  var $$Date = (function () {
-      function $$Date(value0, value1, value2) {
-          this.value0 = value0;
-          this.value1 = value1;
-          this.value2 = value2;
-      };
-      $$Date.create = function (value0) {
-          return function (value1) {
-              return function (value2) {
-                  return new $$Date(value0, value1, value2);
-              };
-          };
-      };
-      return $$Date;
-  })();
-  var year = function (v) {
-      return v.value0;
-  }; 
-  var month = function (v) {
-      return v.value1;
-  };
-  var eqDate = new Data_Eq.Eq(function (x) {
-      return function (y) {
-          return Data_Eq.eq(Data_Date_Component.eqYear)(x.value0)(y.value0) && Data_Eq.eq(Data_Date_Component.eqMonth)(x.value1)(y.value1) && Data_Eq.eq(Data_Date_Component.eqDay)(x.value2)(y.value2);
-      };
-  });
-  var ordDate = new Data_Ord.Ord(function () {
-      return eqDate;
-  }, function (x) {
-      return function (y) {
-          var v = Data_Ord.compare(Data_Date_Component.ordYear)(x.value0)(y.value0);
-          if (v instanceof Data_Ordering.LT) {
-              return Data_Ordering.LT.value;
-          };
-          if (v instanceof Data_Ordering.GT) {
-              return Data_Ordering.GT.value;
-          };
-          var v1 = Data_Ord.compare(Data_Date_Component.ordMonth)(x.value1)(y.value1);
-          if (v1 instanceof Data_Ordering.LT) {
-              return Data_Ordering.LT.value;
-          };
-          if (v1 instanceof Data_Ordering.GT) {
-              return Data_Ordering.GT.value;
-          };
-          return Data_Ord.compare(Data_Date_Component.ordDay)(x.value2)(y.value2);
-      };
-  });
-  var day = function (v) {
-      return v.value2;
-  };
-  var canonicalDate = function (y) {
-      return function (m) {
-          return function (d) {
-              var mkDate = function (y$prime) {
-                  return function (m$prime) {
-                      return function (d$prime) {
-                          return new $$Date(y$prime, Data_Maybe.fromJust()(Data_Enum.toEnum(Data_Date_Component.boundedEnumMonth)(m$prime)), d$prime);
-                      };
-                  };
-              };
-              return $foreign.canonicalDateImpl(mkDate, y, Data_Enum.fromEnum(Data_Date_Component.boundedEnumMonth)(m), d);
-          };
-      };
-  };
-  var exactDate = function (y) {
-      return function (m) {
-          return function (d) {
-              var dt = new $$Date(y, m, d);
-              var $99 = Data_Eq.eq(eqDate)(canonicalDate(y)(m)(d))(dt);
-              if ($99) {
-                  return new Data_Maybe.Just(dt);
-              };
-              return Data_Maybe.Nothing.value;
-          };
-      };
-  };
-  exports["canonicalDate"] = canonicalDate;
-  exports["exactDate"] = exactDate;
-  exports["year"] = year;
-  exports["month"] = month;
-  exports["day"] = day;
-  exports["eqDate"] = eqDate;
-  exports["ordDate"] = ordDate;
-})(PS["Data.Date"] = PS["Data.Date"] || {});
-(function(exports) {
-    "use strict";
-
-  var createUTC = function (y, mo, d, h, m, s, ms) {
-    var date = new Date(Date.UTC(y, mo, d, h, m, s, ms));
-    if (y >= 0 && y < 100) {
-      date.setUTCFullYear(y);
-    }
-    return date.getTime();
-  };
-
-  exports.calcDiff = function (rec1, rec2) {
-    var msUTC1 = createUTC(rec1.year, rec1.month - 1, rec1.day, rec1.hour, rec1.minute, rec1.second, rec1.millisecond);
-    var msUTC2 = createUTC(rec2.year, rec2.month - 1, rec2.day, rec2.hour, rec2.minute, rec2.second, rec2.millisecond);
-    return msUTC1 - msUTC2;
-  };
-})(PS["Data.DateTime"] = PS["Data.DateTime"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Semigroupoid = PS["Control.Semigroupoid"];
-  var Data_Boolean = PS["Data.Boolean"];
-  var Data_Bounded = PS["Data.Bounded"];
-  var Data_Enum = PS["Data.Enum"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ring = PS["Data.Ring"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Data_Show = PS["Data.Show"];
-  var Prelude = PS["Prelude"];
-  var ordSecond = Data_Ord.ordInt;
-  var ordMinute = Data_Ord.ordInt;
-  var ordMillisecond = Data_Ord.ordInt;
-  var ordHour = Data_Ord.ordInt;
-  var eqSecond = Data_Eq.eqInt;
-  var eqMinute = Data_Eq.eqInt;
-  var eqMillisecond = Data_Eq.eqInt;
-  var eqHour = Data_Eq.eqInt;
-  var boundedSecond = new Data_Bounded.Bounded(function () {
-      return ordSecond;
-  }, 0, 59);
-  var boundedMinute = new Data_Bounded.Bounded(function () {
-      return ordMinute;
-  }, 0, 59);
-  var boundedMillisecond = new Data_Bounded.Bounded(function () {
-      return ordMillisecond;
-  }, 0, 999);
-  var boundedHour = new Data_Bounded.Bounded(function () {
-      return ordHour;
-  }, 0, 23);
-  var boundedEnumSecond = new Data_Enum.BoundedEnum(function () {
-      return boundedSecond;
-  }, function () {
-      return enumSecond;
-  }, 60, function (v) {
-      return v;
-  }, function (n) {
-      if (n >= 0 && n <= 59) {
-          return new Data_Maybe.Just(n);
-      };
-      if (Data_Boolean.otherwise) {
-          return Data_Maybe.Nothing.value;
-      };
-      throw new Error("Failed pattern match at Data.Time.Component line 90, column 1 - line 90, column 49: " + [ n.constructor.name ]);
-  });
-  var enumSecond = new Data_Enum.Enum(function () {
-      return ordSecond;
-  }, function ($28) {
-      return Data_Enum.toEnum(boundedEnumSecond)((function (v) {
-          return v - 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumSecond)($28)));
-  }, function ($29) {
-      return Data_Enum.toEnum(boundedEnumSecond)((function (v) {
-          return v + 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumSecond)($29)));
-  });
-  var boundedEnumMinute = new Data_Enum.BoundedEnum(function () {
-      return boundedMinute;
-  }, function () {
-      return enumMinute;
-  }, 60, function (v) {
-      return v;
-  }, function (n) {
-      if (n >= 0 && n <= 59) {
-          return new Data_Maybe.Just(n);
-      };
-      if (Data_Boolean.otherwise) {
-          return Data_Maybe.Nothing.value;
-      };
-      throw new Error("Failed pattern match at Data.Time.Component line 61, column 1 - line 61, column 49: " + [ n.constructor.name ]);
-  });
-  var enumMinute = new Data_Enum.Enum(function () {
-      return ordMinute;
-  }, function ($30) {
-      return Data_Enum.toEnum(boundedEnumMinute)((function (v) {
-          return v - 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumMinute)($30)));
-  }, function ($31) {
-      return Data_Enum.toEnum(boundedEnumMinute)((function (v) {
-          return v + 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumMinute)($31)));
-  });
-  var boundedEnumMillisecond = new Data_Enum.BoundedEnum(function () {
-      return boundedMillisecond;
-  }, function () {
-      return enumMillisecond;
-  }, 1000, function (v) {
-      return v;
-  }, function (n) {
-      if (n >= 0 && n <= 999) {
-          return new Data_Maybe.Just(n);
-      };
-      if (Data_Boolean.otherwise) {
-          return Data_Maybe.Nothing.value;
-      };
-      throw new Error("Failed pattern match at Data.Time.Component line 120, column 1 - line 120, column 59: " + [ n.constructor.name ]);
-  });
-  var enumMillisecond = new Data_Enum.Enum(function () {
-      return ordMillisecond;
-  }, function ($32) {
-      return Data_Enum.toEnum(boundedEnumMillisecond)((function (v) {
-          return v - 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumMillisecond)($32)));
-  }, function ($33) {
-      return Data_Enum.toEnum(boundedEnumMillisecond)((function (v) {
-          return v + 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumMillisecond)($33)));
-  });
-  var boundedEnumHour = new Data_Enum.BoundedEnum(function () {
-      return boundedHour;
-  }, function () {
-      return enumHour;
-  }, 24, function (v) {
-      return v;
-  }, function (n) {
-      if (n >= 0 && n <= 23) {
-          return new Data_Maybe.Just(n);
-      };
-      if (Data_Boolean.otherwise) {
-          return Data_Maybe.Nothing.value;
-      };
-      throw new Error("Failed pattern match at Data.Time.Component line 32, column 1 - line 32, column 45: " + [ n.constructor.name ]);
-  });
-  var enumHour = new Data_Enum.Enum(function () {
-      return ordHour;
-  }, function ($34) {
-      return Data_Enum.toEnum(boundedEnumHour)((function (v) {
-          return v - 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumHour)($34)));
-  }, function ($35) {
-      return Data_Enum.toEnum(boundedEnumHour)((function (v) {
-          return v + 1 | 0;
-      })(Data_Enum.fromEnum(boundedEnumHour)($35)));
-  });
-  exports["eqHour"] = eqHour;
-  exports["ordHour"] = ordHour;
-  exports["boundedHour"] = boundedHour;
-  exports["enumHour"] = enumHour;
-  exports["boundedEnumHour"] = boundedEnumHour;
-  exports["eqMinute"] = eqMinute;
-  exports["ordMinute"] = ordMinute;
-  exports["boundedMinute"] = boundedMinute;
-  exports["enumMinute"] = enumMinute;
-  exports["boundedEnumMinute"] = boundedEnumMinute;
-  exports["eqSecond"] = eqSecond;
-  exports["ordSecond"] = ordSecond;
-  exports["boundedSecond"] = boundedSecond;
-  exports["enumSecond"] = enumSecond;
-  exports["boundedEnumSecond"] = boundedEnumSecond;
-  exports["eqMillisecond"] = eqMillisecond;
-  exports["ordMillisecond"] = ordMillisecond;
-  exports["boundedMillisecond"] = boundedMillisecond;
-  exports["enumMillisecond"] = enumMillisecond;
-  exports["boundedEnumMillisecond"] = boundedEnumMillisecond;
-})(PS["Data.Time.Component"] = PS["Data.Time.Component"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Apply = PS["Control.Apply"];
-  var Data_Bounded = PS["Data.Bounded"];
-  var Data_Enum = PS["Data.Enum"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_EuclideanRing = PS["Data.EuclideanRing"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
-  var Data_Int = PS["Data.Int"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Newtype = PS["Data.Newtype"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ordering = PS["Data.Ordering"];
-  var Data_Ring = PS["Data.Ring"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Data_Show = PS["Data.Show"];
-  var Data_Time_Component = PS["Data.Time.Component"];
-  var Data_Time_Duration = PS["Data.Time.Duration"];
-  var Data_Tuple = PS["Data.Tuple"];
-  var $$Math = PS["Math"];
-  var Partial_Unsafe = PS["Partial.Unsafe"];
-  var Prelude = PS["Prelude"];                 
-  var Time = (function () {
-      function Time(value0, value1, value2, value3) {
-          this.value0 = value0;
-          this.value1 = value1;
-          this.value2 = value2;
-          this.value3 = value3;
-      };
-      Time.create = function (value0) {
-          return function (value1) {
-              return function (value2) {
-                  return function (value3) {
-                      return new Time(value0, value1, value2, value3);
-                  };
-              };
-          };
-      };
-      return Time;
-  })();
-  var second = function (v) {
-      return v.value2;
-  };
-  var minute = function (v) {
-      return v.value1;
-  };
-  var millisecond = function (v) {
-      return v.value3;
-  };
-  var hour = function (v) {
-      return v.value0;
-  };
-  var eqTime = new Data_Eq.Eq(function (x) {
-      return function (y) {
-          return Data_Eq.eq(Data_Time_Component.eqHour)(x.value0)(y.value0) && Data_Eq.eq(Data_Time_Component.eqMinute)(x.value1)(y.value1) && Data_Eq.eq(Data_Time_Component.eqSecond)(x.value2)(y.value2) && Data_Eq.eq(Data_Time_Component.eqMillisecond)(x.value3)(y.value3);
-      };
-  });
-  var ordTime = new Data_Ord.Ord(function () {
-      return eqTime;
-  }, function (x) {
-      return function (y) {
-          var v = Data_Ord.compare(Data_Time_Component.ordHour)(x.value0)(y.value0);
-          if (v instanceof Data_Ordering.LT) {
-              return Data_Ordering.LT.value;
-          };
-          if (v instanceof Data_Ordering.GT) {
-              return Data_Ordering.GT.value;
-          };
-          var v1 = Data_Ord.compare(Data_Time_Component.ordMinute)(x.value1)(y.value1);
-          if (v1 instanceof Data_Ordering.LT) {
-              return Data_Ordering.LT.value;
-          };
-          if (v1 instanceof Data_Ordering.GT) {
-              return Data_Ordering.GT.value;
-          };
-          var v2 = Data_Ord.compare(Data_Time_Component.ordSecond)(x.value2)(y.value2);
-          if (v2 instanceof Data_Ordering.LT) {
-              return Data_Ordering.LT.value;
-          };
-          if (v2 instanceof Data_Ordering.GT) {
-              return Data_Ordering.GT.value;
-          };
-          return Data_Ord.compare(Data_Time_Component.ordMillisecond)(x.value3)(y.value3);
-      };
-  });
-  exports["Time"] = Time;
-  exports["hour"] = hour;
-  exports["minute"] = minute;
-  exports["second"] = second;
-  exports["millisecond"] = millisecond;
-  exports["eqTime"] = eqTime;
-  exports["ordTime"] = ordTime;
-})(PS["Data.Time"] = PS["Data.Time"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var $foreign = PS["Data.DateTime"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Data_Bounded = PS["Data.Bounded"];
-  var Data_Date = PS["Data.Date"];
-  var Data_Date_Component = PS["Data.Date.Component"];
-  var Data_Enum = PS["Data.Enum"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_Function = PS["Data.Function"];
-  var Data_Function_Uncurried = PS["Data.Function.Uncurried"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
-  var Data_Maybe = PS["Data.Maybe"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ordering = PS["Data.Ordering"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Show = PS["Data.Show"];
-  var Data_Time = PS["Data.Time"];
-  var Data_Time_Component = PS["Data.Time.Component"];
-  var Data_Time_Duration = PS["Data.Time.Duration"];
-  var Prelude = PS["Prelude"];                 
-  var DateTime = (function () {
-      function DateTime(value0, value1) {
-          this.value0 = value0;
-          this.value1 = value1;
-      };
-      DateTime.create = function (value0) {
-          return function (value1) {
-              return new DateTime(value0, value1);
-          };
-      };
-      return DateTime;
-  })();
-  var toRecord = function (v) {
-      return {
-          year: Data_Enum.fromEnum(Data_Date_Component.boundedEnumYear)(Data_Date.year(v.value0)),
-          month: Data_Enum.fromEnum(Data_Date_Component.boundedEnumMonth)(Data_Date.month(v.value0)),
-          day: Data_Enum.fromEnum(Data_Date_Component.boundedEnumDay)(Data_Date.day(v.value0)),
-          hour: Data_Enum.fromEnum(Data_Time_Component.boundedEnumHour)(Data_Time.hour(v.value1)),
-          minute: Data_Enum.fromEnum(Data_Time_Component.boundedEnumMinute)(Data_Time.minute(v.value1)),
-          second: Data_Enum.fromEnum(Data_Time_Component.boundedEnumSecond)(Data_Time.second(v.value1)),
-          millisecond: Data_Enum.fromEnum(Data_Time_Component.boundedEnumMillisecond)(Data_Time.millisecond(v.value1))
-      };
-  };
-  var time = function (v) {
-      return v.value1;
-  };
-  var eqDateTime = new Data_Eq.Eq(function (x) {
-      return function (y) {
-          return Data_Eq.eq(Data_Date.eqDate)(x.value0)(y.value0) && Data_Eq.eq(Data_Time.eqTime)(x.value1)(y.value1);
-      };
-  });
-  var ordDateTime = new Data_Ord.Ord(function () {
-      return eqDateTime;
-  }, function (x) {
-      return function (y) {
-          var v = Data_Ord.compare(Data_Date.ordDate)(x.value0)(y.value0);
-          if (v instanceof Data_Ordering.LT) {
-              return Data_Ordering.LT.value;
-          };
-          if (v instanceof Data_Ordering.GT) {
-              return Data_Ordering.GT.value;
-          };
-          return Data_Ord.compare(Data_Time.ordTime)(x.value1)(y.value1);
-      };
-  });
-  var diff = function (dictDuration) {
-      return function (dt1) {
-          return function (dt2) {
-              return Data_Time_Duration.toDuration(dictDuration)($foreign.calcDiff(toRecord(dt1), toRecord(dt2)));
-          };
-      };
-  };
-  exports["DateTime"] = DateTime;
-  exports["time"] = time;
-  exports["diff"] = diff;
-  exports["eqDateTime"] = eqDateTime;
-  exports["ordDateTime"] = ordDateTime;
-})(PS["Data.DateTime"] = PS["Data.DateTime"] || {});
-(function(exports) {
-  // Generated by purs version 0.12.0
-  "use strict";
-  var Control_Alt = PS["Control.Alt"];
-  var Control_Applicative = PS["Control.Applicative"];
-  var Control_Apply = PS["Control.Apply"];
-  var Control_Bind = PS["Control.Bind"];
-  var Control_Comonad = PS["Control.Comonad"];
-  var Control_Extend = PS["Control.Extend"];
-  var Control_Lazy = PS["Control.Lazy"];
-  var Control_Monad = PS["Control.Monad"];
-  var Data_BooleanAlgebra = PS["Data.BooleanAlgebra"];
-  var Data_Bounded = PS["Data.Bounded"];
-  var Data_CommutativeRing = PS["Data.CommutativeRing"];
-  var Data_Eq = PS["Data.Eq"];
-  var Data_EuclideanRing = PS["Data.EuclideanRing"];
-  var Data_Foldable = PS["Data.Foldable"];
-  var Data_FoldableWithIndex = PS["Data.FoldableWithIndex"];
-  var Data_Functor = PS["Data.Functor"];
-  var Data_Functor_Invariant = PS["Data.Functor.Invariant"];
-  var Data_FunctorWithIndex = PS["Data.FunctorWithIndex"];
-  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
-  var Data_Monoid = PS["Data.Monoid"];
-  var Data_Newtype = PS["Data.Newtype"];
-  var Data_Ord = PS["Data.Ord"];
-  var Data_Ring = PS["Data.Ring"];
-  var Data_Semigroup = PS["Data.Semigroup"];
-  var Data_Semigroup_Foldable = PS["Data.Semigroup.Foldable"];
-  var Data_Semigroup_Traversable = PS["Data.Semigroup.Traversable"];
-  var Data_Semiring = PS["Data.Semiring"];
-  var Data_Show = PS["Data.Show"];
-  var Data_Traversable = PS["Data.Traversable"];
-  var Data_TraversableWithIndex = PS["Data.TraversableWithIndex"];
-  var Data_Unit = PS["Data.Unit"];
-  var Prelude = PS["Prelude"];                 
-  var Identity = function (x) {
-      return x;
-  };
-  var newtypeIdentity = new Data_Newtype.Newtype(function (n) {
-      return n;
-  }, Identity);
-  var functorIdentity = new Data_Functor.Functor(function (f) {
-      return function (m) {
-          return f(m);
-      };
-  });
-  var applyIdentity = new Control_Apply.Apply(function () {
-      return functorIdentity;
-  }, function (v) {
-      return function (v1) {
-          return v(v1);
-      };
-  });
-  var bindIdentity = new Control_Bind.Bind(function () {
-      return applyIdentity;
-  }, function (v) {
-      return function (f) {
-          return f(v);
-      };
-  });
-  var applicativeIdentity = new Control_Applicative.Applicative(function () {
-      return applyIdentity;
-  }, Identity);
-  var monadIdentity = new Control_Monad.Monad(function () {
-      return applicativeIdentity;
-  }, function () {
-      return bindIdentity;
-  });
-  exports["Identity"] = Identity;
-  exports["newtypeIdentity"] = newtypeIdentity;
-  exports["functorIdentity"] = functorIdentity;
-  exports["applyIdentity"] = applyIdentity;
-  exports["applicativeIdentity"] = applicativeIdentity;
-  exports["bindIdentity"] = bindIdentity;
-  exports["monadIdentity"] = monadIdentity;
-})(PS["Data.Identity"] = PS["Data.Identity"] || {});
 (function(exports) {
   // Generated by purs version 0.12.0
   "use strict";
@@ -5842,6 +3756,2341 @@ var PS = {};
 (function(exports) {
   // Generated by purs version 0.12.0
   "use strict";
+  var Data_Array = PS["Data.Array"];
+  var Data_Boolean = PS["Data.Boolean"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_Foldable = PS["Data.Foldable"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_List = PS["Data.List"];
+  var Data_List_Types = PS["Data.List.Types"];
+  var Data_Map = PS["Data.Map"];
+  var Data_Map_Internal = PS["Data.Map.Internal"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Monoid = PS["Data.Monoid"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Show = PS["Data.Show"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var Partial_Unsafe = PS["Partial.Unsafe"];
+  var Prelude = PS["Prelude"];                 
+  var CircularList = (function () {
+      function CircularList(value0) {
+          this.value0 = value0;
+      };
+      CircularList.create = function (value0) {
+          return new CircularList(value0);
+      };
+      return CircularList;
+  })();
+  var Empty = (function () {
+      function Empty() {
+
+      };
+      Empty.value = new Empty();
+      return Empty;
+  })();
+  var singleton = function (dictOrd) {
+      return function (a) {
+          return new CircularList({
+              lefts: Data_Map_Internal.singleton(a)(a),
+              rights: Data_Map_Internal.singleton(a)(a),
+              current: a
+          });
+      };
+  };
+  var safeLookup = function (dictOrd) {
+      return function (a) {
+          return function (map) {
+              return Data_Maybe.fromJust()(Data_Map_Internal.lookup(dictOrd)(a)(map));
+          };
+      };
+  };
+  var shiftLeft = function (dictOrd) {
+      return function (v) {
+          if (v instanceof Empty) {
+              return Empty.value;
+          };
+          if (v instanceof CircularList) {
+              return new CircularList({
+                  lefts: v.value0.lefts,
+                  rights: v.value0.rights,
+                  current: safeLookup(dictOrd)(v.value0.current)(v.value0.lefts)
+              });
+          };
+          throw new Error("Failed pattern match at CircularList line 112, column 1 - line 112, column 65: " + [ v.constructor.name ]);
+      };
+  };
+  var shiftLeftN = function (dictOrd) {
+      return function (n) {
+          return function (v) {
+              if (v instanceof Empty) {
+                  return Empty.value;
+              };
+              if (v instanceof CircularList) {
+                  if (n === 0) {
+                      return v;
+                  };
+                  if (Data_Boolean.otherwise) {
+                      return Data_Foldable.foldl(Data_Foldable.foldableArray)(function (a) {
+                          return function (v1) {
+                              return shiftLeft(dictOrd)(a);
+                          };
+                      })(v)(Data_Array.range(0)(n - 1 | 0));
+                  };
+              };
+              throw new Error("Failed pattern match at CircularList line 117, column 1 - line 117, column 73: " + [ n.constructor.name, v.constructor.name ]);
+          };
+      };
+  };
+  var shiftRight = function (dictOrd) {
+      return function (v) {
+          if (v instanceof Empty) {
+              return Empty.value;
+          };
+          if (v instanceof CircularList) {
+              return new CircularList({
+                  lefts: v.value0.lefts,
+                  rights: v.value0.rights,
+                  current: safeLookup(dictOrd)(v.value0.current)(v.value0.rights)
+              });
+          };
+          throw new Error("Failed pattern match at CircularList line 97, column 1 - line 97, column 66: " + [ v.constructor.name ]);
+      };
+  };
+  var popCurrent = function (dictOrd) {
+      return function (v) {
+          if (v instanceof Empty) {
+              return Data_Maybe.Nothing.value;
+          };
+          if (v instanceof CircularList) {
+              var right = safeLookup(dictOrd)(v.value0.current)(v.value0.rights);
+              var left = safeLookup(dictOrd)(v.value0.current)(v.value0.lefts);
+              var newList = new CircularList({
+                  lefts: Data_Map_Internal.insert(dictOrd)(right)(left)(v.value0.lefts),
+                  rights: Data_Map_Internal.insert(dictOrd)(left)(right)(v.value0.rights),
+                  current: right
+              });
+              return Data_Maybe.Just.create(new Data_Tuple.Tuple(v.value0.current, newList));
+          };
+          throw new Error("Failed pattern match at CircularList line 81, column 1 - line 81, column 84: " + [ v.constructor.name ]);
+      };
+  };
+  var insertRight = function (dictOrd) {
+      return function (a) {
+          return function (v) {
+              if (v instanceof Empty) {
+                  return singleton(dictOrd)(a);
+              };
+              if (v instanceof CircularList) {
+                  var right = safeLookup(dictOrd)(v.value0.current)(v.value0.rights);
+                  var left = safeLookup(dictOrd)(v.value0.current)(v.value0.lefts);
+                  return new CircularList({
+                      lefts: Data_Map_Internal.insert(dictOrd)(a)(v.value0.current)(Data_Map_Internal.insert(dictOrd)(right)(a)(v.value0.lefts)),
+                      rights: Data_Map_Internal.insert(dictOrd)(v.value0.current)(a)(Data_Map_Internal.insert(dictOrd)(a)(right)(v.value0.rights)),
+                      current: a
+                  });
+              };
+              throw new Error("Failed pattern match at CircularList line 55, column 1 - line 55, column 72: " + [ a.constructor.name, v.constructor.name ]);
+          };
+      };
+  };
+  exports["singleton"] = singleton;
+  exports["insertRight"] = insertRight;
+  exports["shiftRight"] = shiftRight;
+  exports["shiftLeft"] = shiftLeft;
+  exports["shiftLeftN"] = shiftLeftN;
+  exports["popCurrent"] = popCurrent;
+})(PS["CircularList"] = PS["CircularList"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Alt = PS["Control.Alt"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Extend = PS["Control.Extend"];
+  var Control_Monad = PS["Control.Monad"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Bifoldable = PS["Data.Bifoldable"];
+  var Data_Bifunctor = PS["Data.Bifunctor"];
+  var Data_Bitraversable = PS["Data.Bitraversable"];
+  var Data_Bounded = PS["Data.Bounded"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_Foldable = PS["Data.Foldable"];
+  var Data_FoldableWithIndex = PS["Data.FoldableWithIndex"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Functor_Invariant = PS["Data.Functor.Invariant"];
+  var Data_FunctorWithIndex = PS["Data.FunctorWithIndex"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Monoid = PS["Data.Monoid"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ordering = PS["Data.Ordering"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Show = PS["Data.Show"];
+  var Data_Traversable = PS["Data.Traversable"];
+  var Data_TraversableWithIndex = PS["Data.TraversableWithIndex"];
+  var Data_Unit = PS["Data.Unit"];
+  var Prelude = PS["Prelude"];                 
+  var Left = (function () {
+      function Left(value0) {
+          this.value0 = value0;
+      };
+      Left.create = function (value0) {
+          return new Left(value0);
+      };
+      return Left;
+  })();
+  var Right = (function () {
+      function Right(value0) {
+          this.value0 = value0;
+      };
+      Right.create = function (value0) {
+          return new Right(value0);
+      };
+      return Right;
+  })();
+  var note = function (a) {
+      return Data_Maybe.maybe(new Left(a))(Right.create);
+  };
+  var functorEither = new Data_Functor.Functor(function (f) {
+      return function (m) {
+          if (m instanceof Left) {
+              return new Left(m.value0);
+          };
+          if (m instanceof Right) {
+              return new Right(f(m.value0));
+          };
+          throw new Error("Failed pattern match at Data.Either line 38, column 8 - line 38, column 52: " + [ m.constructor.name ]);
+      };
+  });                                                                                                     
+  var fromRight = function (dictPartial) {
+      return function (v) {
+          var $__unused = function (dictPartial1) {
+              return function ($dollar71) {
+                  return $dollar71;
+              };
+          };
+          return $__unused(dictPartial)((function () {
+              if (v instanceof Right) {
+                  return v.value0;
+              };
+              throw new Error("Failed pattern match at Data.Either line 261, column 1 - line 261, column 52: " + [ v.constructor.name ]);
+          })());
+      };
+  };
+  var either = function (v) {
+      return function (v1) {
+          return function (v2) {
+              if (v2 instanceof Left) {
+                  return v(v2.value0);
+              };
+              if (v2 instanceof Right) {
+                  return v1(v2.value0);
+              };
+              throw new Error("Failed pattern match at Data.Either line 238, column 1 - line 238, column 64: " + [ v.constructor.name, v1.constructor.name, v2.constructor.name ]);
+          };
+      };
+  };
+  var hush = either(Data_Function["const"](Data_Maybe.Nothing.value))(Data_Maybe.Just.create);
+  exports["Left"] = Left;
+  exports["Right"] = Right;
+  exports["either"] = either;
+  exports["fromRight"] = fromRight;
+  exports["note"] = note;
+  exports["hush"] = hush;
+  exports["functorEither"] = functorEither;
+})(PS["Data.Either"] = PS["Data.Either"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Either = PS["Data.Either"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Unit = PS["Data.Unit"];
+  var Prelude = PS["Prelude"];                 
+  var MonadThrow = function (Monad0, throwError) {
+      this.Monad0 = Monad0;
+      this.throwError = throwError;
+  };
+  var throwError = function (dict) {
+      return dict.throwError;
+  };
+  exports["throwError"] = throwError;
+  exports["MonadThrow"] = MonadThrow;
+})(PS["Control.Monad.Error.Class"] = PS["Control.Monad.Error.Class"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Category = PS["Control.Category"];
+  var Control_Monad = PS["Control.Monad"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Functor = PS["Data.Functor"];
+  var Prelude = PS["Prelude"];                 
+  var MonadAsk = function (Monad0, ask) {
+      this.Monad0 = Monad0;
+      this.ask = ask;
+  };
+  var ask = function (dict) {
+      return dict.ask;
+  };
+  exports["ask"] = ask;
+  exports["MonadAsk"] = MonadAsk;
+})(PS["Control.Monad.Reader.Class"] = PS["Control.Monad.Reader.Class"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Data_Tuple = PS["Data.Tuple"];
+  var Data_Unit = PS["Data.Unit"];
+  var Prelude = PS["Prelude"];                 
+  var MonadState = function (Monad0, state) {
+      this.Monad0 = Monad0;
+      this.state = state;
+  };
+  var state = function (dict) {
+      return dict.state;
+  };
+  var put = function (dictMonadState) {
+      return function (s) {
+          return state(dictMonadState)(function (v) {
+              return new Data_Tuple.Tuple(Data_Unit.unit, s);
+          });
+      };
+  };
+  var modify_ = function (dictMonadState) {
+      return function (f) {
+          return state(dictMonadState)(function (s) {
+              return new Data_Tuple.Tuple(Data_Unit.unit, f(s));
+          });
+      };
+  };
+  var gets = function (dictMonadState) {
+      return function (f) {
+          return state(dictMonadState)(function (s) {
+              return new Data_Tuple.Tuple(f(s), s);
+          });
+      };
+  };
+  var get = function (dictMonadState) {
+      return state(dictMonadState)(function (s) {
+          return new Data_Tuple.Tuple(s, s);
+      });
+  };
+  exports["state"] = state;
+  exports["MonadState"] = MonadState;
+  exports["get"] = get;
+  exports["gets"] = gets;
+  exports["put"] = put;
+  exports["modify_"] = modify_;
+})(PS["Control.Monad.State.Class"] = PS["Control.Monad.State.Class"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Prelude = PS["Prelude"];                 
+  var MonadTrans = function (lift) {
+      this.lift = lift;
+  };
+  var lift = function (dict) {
+      return dict.lift;
+  };
+  exports["lift"] = lift;
+  exports["MonadTrans"] = MonadTrans;
+})(PS["Control.Monad.Trans.Class"] = PS["Control.Monad.Trans.Class"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Bind = PS["Control.Bind"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var Prelude = PS["Prelude"];                 
+  var MonadTell = function (Monad0, tell) {
+      this.Monad0 = Monad0;
+      this.tell = tell;
+  };
+  var tell = function (dict) {
+      return dict.tell;
+  };
+  exports["tell"] = tell;
+  exports["MonadTell"] = MonadTell;
+})(PS["Control.Monad.Writer.Class"] = PS["Control.Monad.Writer.Class"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Alt = PS["Control.Alt"];
+  var Control_Alternative = PS["Control.Alternative"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Category = PS["Control.Category"];
+  var Control_Monad = PS["Control.Monad"];
+  var Control_Monad_Cont_Class = PS["Control.Monad.Cont.Class"];
+  var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
+  var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
+  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
+  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
+  var Control_Monad_Trans_Class = PS["Control.Monad.Trans.Class"];
+  var Control_Monad_Writer_Class = PS["Control.Monad.Writer.Class"];
+  var Control_MonadPlus = PS["Control.MonadPlus"];
+  var Control_MonadZero = PS["Control.MonadZero"];
+  var Control_Plus = PS["Control.Plus"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Either = PS["Data.Either"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Monoid = PS["Data.Monoid"];
+  var Data_Newtype = PS["Data.Newtype"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var Effect_Class = PS["Effect.Class"];
+  var Prelude = PS["Prelude"];                 
+  var ExceptT = function (x) {
+      return x;
+  };
+  var runExceptT = function (v) {
+      return v;
+  };          
+  var monadTransExceptT = new Control_Monad_Trans_Class.MonadTrans(function (dictMonad) {
+      return function (m) {
+          return Control_Bind.bind(dictMonad.Bind1())(m)(function (v) {
+              return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Either.Right(v));
+          });
+      };
+  });
+  var mapExceptT = function (f) {
+      return function (v) {
+          return f(v);
+      };
+  };
+  var functorExceptT = function (dictFunctor) {
+      return new Data_Functor.Functor(function (f) {
+          return mapExceptT(Data_Functor.map(dictFunctor)(Data_Functor.map(Data_Either.functorEither)(f)));
+      });
+  };
+  var except = function (dictApplicative) {
+      return function ($96) {
+          return ExceptT(Control_Applicative.pure(dictApplicative)($96));
+      };
+  };
+  var monadExceptT = function (dictMonad) {
+      return new Control_Monad.Monad(function () {
+          return applicativeExceptT(dictMonad);
+      }, function () {
+          return bindExceptT(dictMonad);
+      });
+  };
+  var bindExceptT = function (dictMonad) {
+      return new Control_Bind.Bind(function () {
+          return applyExceptT(dictMonad);
+      }, function (v) {
+          return function (k) {
+              return Control_Bind.bind(dictMonad.Bind1())(v)(Data_Either.either(function ($97) {
+                  return Control_Applicative.pure(dictMonad.Applicative0())(Data_Either.Left.create($97));
+              })(function (a) {
+                  var v1 = k(a);
+                  return v1;
+              }));
+          };
+      });
+  };
+  var applyExceptT = function (dictMonad) {
+      return new Control_Apply.Apply(function () {
+          return functorExceptT(((dictMonad.Bind1()).Apply0()).Functor0());
+      }, Control_Monad.ap(monadExceptT(dictMonad)));
+  };
+  var applicativeExceptT = function (dictMonad) {
+      return new Control_Applicative.Applicative(function () {
+          return applyExceptT(dictMonad);
+      }, function ($98) {
+          return ExceptT(Control_Applicative.pure(dictMonad.Applicative0())(Data_Either.Right.create($98)));
+      });
+  };
+  var monadAskExceptT = function (dictMonadAsk) {
+      return new Control_Monad_Reader_Class.MonadAsk(function () {
+          return monadExceptT(dictMonadAsk.Monad0());
+      }, Control_Monad_Trans_Class.lift(monadTransExceptT)(dictMonadAsk.Monad0())(Control_Monad_Reader_Class.ask(dictMonadAsk)));
+  };
+  var monadTellExceptT = function (dictMonadTell) {
+      return new Control_Monad_Writer_Class.MonadTell(function () {
+          return monadExceptT(dictMonadTell.Monad0());
+      }, function ($101) {
+          return Control_Monad_Trans_Class.lift(monadTransExceptT)(dictMonadTell.Monad0())(Control_Monad_Writer_Class.tell(dictMonadTell)($101));
+      });
+  };
+  var monadThrowExceptT = function (dictMonad) {
+      return new Control_Monad_Error_Class.MonadThrow(function () {
+          return monadExceptT(dictMonad);
+      }, function ($102) {
+          return ExceptT(Control_Applicative.pure(dictMonad.Applicative0())(Data_Either.Left.create($102)));
+      });
+  };
+  var altExceptT = function (dictSemigroup) {
+      return function (dictMonad) {
+          return new Control_Alt.Alt(function () {
+              return functorExceptT(((dictMonad.Bind1()).Apply0()).Functor0());
+          }, function (v) {
+              return function (v1) {
+                  return Control_Bind.bind(dictMonad.Bind1())(v)(function (v2) {
+                      if (v2 instanceof Data_Either.Right) {
+                          return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Either.Right(v2.value0));
+                      };
+                      if (v2 instanceof Data_Either.Left) {
+                          return Control_Bind.bind(dictMonad.Bind1())(v1)(function (v3) {
+                              if (v3 instanceof Data_Either.Right) {
+                                  return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Either.Right(v3.value0));
+                              };
+                              if (v3 instanceof Data_Either.Left) {
+                                  return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Either.Left(Data_Semigroup.append(dictSemigroup)(v2.value0)(v3.value0)));
+                              };
+                              throw new Error("Failed pattern match at Control.Monad.Except.Trans line 86, column 9 - line 88, column 49: " + [ v3.constructor.name ]);
+                          });
+                      };
+                      throw new Error("Failed pattern match at Control.Monad.Except.Trans line 82, column 5 - line 88, column 49: " + [ v2.constructor.name ]);
+                  });
+              };
+          });
+      };
+  };
+  var plusExceptT = function (dictMonoid) {
+      return function (dictMonad) {
+          return new Control_Plus.Plus(function () {
+              return altExceptT(dictMonoid.Semigroup0())(dictMonad);
+          }, Control_Monad_Error_Class.throwError(monadThrowExceptT(dictMonad))(Data_Monoid.mempty(dictMonoid)));
+      };
+  };
+  var alternativeExceptT = function (dictMonoid) {
+      return function (dictMonad) {
+          return new Control_Alternative.Alternative(function () {
+              return applicativeExceptT(dictMonad);
+          }, function () {
+              return plusExceptT(dictMonoid)(dictMonad);
+          });
+      };
+  };
+  var monadZeroExceptT = function (dictMonoid) {
+      return function (dictMonad) {
+          return new Control_MonadZero.MonadZero(function () {
+              return alternativeExceptT(dictMonoid)(dictMonad);
+          }, function () {
+              return monadExceptT(dictMonad);
+          });
+      };
+  };
+  exports["ExceptT"] = ExceptT;
+  exports["runExceptT"] = runExceptT;
+  exports["mapExceptT"] = mapExceptT;
+  exports["except"] = except;
+  exports["functorExceptT"] = functorExceptT;
+  exports["applyExceptT"] = applyExceptT;
+  exports["applicativeExceptT"] = applicativeExceptT;
+  exports["bindExceptT"] = bindExceptT;
+  exports["monadExceptT"] = monadExceptT;
+  exports["altExceptT"] = altExceptT;
+  exports["plusExceptT"] = plusExceptT;
+  exports["alternativeExceptT"] = alternativeExceptT;
+  exports["monadZeroExceptT"] = monadZeroExceptT;
+  exports["monadTransExceptT"] = monadTransExceptT;
+  exports["monadThrowExceptT"] = monadThrowExceptT;
+  exports["monadAskExceptT"] = monadAskExceptT;
+  exports["monadTellExceptT"] = monadTellExceptT;
+})(PS["Control.Monad.Except.Trans"] = PS["Control.Monad.Except.Trans"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Alt = PS["Control.Alt"];
+  var Control_Alternative = PS["Control.Alternative"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Monad = PS["Control.Monad"];
+  var Control_Monad_Cont_Class = PS["Control.Monad.Cont.Class"];
+  var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
+  var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
+  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
+  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
+  var Control_Monad_Trans_Class = PS["Control.Monad.Trans.Class"];
+  var Control_Monad_Writer_Class = PS["Control.Monad.Writer.Class"];
+  var Control_MonadPlus = PS["Control.MonadPlus"];
+  var Control_MonadZero = PS["Control.MonadZero"];
+  var Control_Plus = PS["Control.Plus"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Distributive = PS["Data.Distributive"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Monoid = PS["Data.Monoid"];
+  var Data_Newtype = PS["Data.Newtype"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Effect_Class = PS["Effect.Class"];
+  var Prelude = PS["Prelude"];                 
+  var ReaderT = function (x) {
+      return x;
+  };
+  var runReaderT = function (v) {
+      return v;
+  }; 
+  var mapReaderT = function (f) {
+      return function (v) {
+          return function ($68) {
+              return f(v($68));
+          };
+      };
+  };
+  var functorReaderT = function (dictFunctor) {
+      return new Data_Functor.Functor(function ($69) {
+          return mapReaderT(Data_Functor.map(dictFunctor)($69));
+      });
+  };
+  var applyReaderT = function (dictApply) {
+      return new Control_Apply.Apply(function () {
+          return functorReaderT(dictApply.Functor0());
+      }, function (v) {
+          return function (v1) {
+              return function (r) {
+                  return Control_Apply.apply(dictApply)(v(r))(v1(r));
+              };
+          };
+      });
+  };
+  var bindReaderT = function (dictBind) {
+      return new Control_Bind.Bind(function () {
+          return applyReaderT(dictBind.Apply0());
+      }, function (v) {
+          return function (k) {
+              return function (r) {
+                  return Control_Bind.bind(dictBind)(v(r))(function (a) {
+                      var v1 = k(a);
+                      return v1(r);
+                  });
+              };
+          };
+      });
+  };
+  var applicativeReaderT = function (dictApplicative) {
+      return new Control_Applicative.Applicative(function () {
+          return applyReaderT(dictApplicative.Apply0());
+      }, function ($71) {
+          return ReaderT(Data_Function["const"](Control_Applicative.pure(dictApplicative)($71)));
+      });
+  };
+  var monadReaderT = function (dictMonad) {
+      return new Control_Monad.Monad(function () {
+          return applicativeReaderT(dictMonad.Applicative0());
+      }, function () {
+          return bindReaderT(dictMonad.Bind1());
+      });
+  };
+  var monadAskReaderT = function (dictMonad) {
+      return new Control_Monad_Reader_Class.MonadAsk(function () {
+          return monadReaderT(dictMonad);
+      }, Control_Applicative.pure(dictMonad.Applicative0()));
+  };
+  exports["ReaderT"] = ReaderT;
+  exports["runReaderT"] = runReaderT;
+  exports["mapReaderT"] = mapReaderT;
+  exports["functorReaderT"] = functorReaderT;
+  exports["applyReaderT"] = applyReaderT;
+  exports["applicativeReaderT"] = applicativeReaderT;
+  exports["bindReaderT"] = bindReaderT;
+  exports["monadReaderT"] = monadReaderT;
+  exports["monadAskReaderT"] = monadAskReaderT;
+})(PS["Control.Monad.Reader.Trans"] = PS["Control.Monad.Reader.Trans"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Alt = PS["Control.Alt"];
+  var Control_Alternative = PS["Control.Alternative"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Lazy = PS["Control.Lazy"];
+  var Control_Monad = PS["Control.Monad"];
+  var Control_Monad_Cont_Class = PS["Control.Monad.Cont.Class"];
+  var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
+  var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
+  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
+  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
+  var Control_Monad_Trans_Class = PS["Control.Monad.Trans.Class"];
+  var Control_Monad_Writer_Class = PS["Control.Monad.Writer.Class"];
+  var Control_MonadPlus = PS["Control.MonadPlus"];
+  var Control_MonadZero = PS["Control.MonadZero"];
+  var Control_Plus = PS["Control.Plus"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Newtype = PS["Data.Newtype"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var Data_Unit = PS["Data.Unit"];
+  var Effect_Class = PS["Effect.Class"];
+  var Prelude = PS["Prelude"];                 
+  var StateT = function (x) {
+      return x;
+  };
+  var runStateT = function (v) {
+      return v;
+  };         
+  var monadTransStateT = new Control_Monad_Trans_Class.MonadTrans(function (dictMonad) {
+      return function (m) {
+          return function (s) {
+              return Control_Bind.bind(dictMonad.Bind1())(m)(function (v) {
+                  return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Tuple.Tuple(v, s));
+              });
+          };
+      };
+  });
+  var lazyStateT = new Control_Lazy.Lazy(function (f) {
+      return function (s) {
+          var v = f(Data_Unit.unit);
+          return v(s);
+      };
+  });
+  var functorStateT = function (dictFunctor) {
+      return new Data_Functor.Functor(function (f) {
+          return function (v) {
+              return function (s) {
+                  return Data_Functor.map(dictFunctor)(function (v1) {
+                      return new Data_Tuple.Tuple(f(v1.value0), v1.value1);
+                  })(v(s));
+              };
+          };
+      });
+  };
+  var monadStateT = function (dictMonad) {
+      return new Control_Monad.Monad(function () {
+          return applicativeStateT(dictMonad);
+      }, function () {
+          return bindStateT(dictMonad);
+      });
+  };
+  var bindStateT = function (dictMonad) {
+      return new Control_Bind.Bind(function () {
+          return applyStateT(dictMonad);
+      }, function (v) {
+          return function (f) {
+              return function (s) {
+                  return Control_Bind.bind(dictMonad.Bind1())(v(s))(function (v1) {
+                      var v3 = f(v1.value0);
+                      return v3(v1.value1);
+                  });
+              };
+          };
+      });
+  };
+  var applyStateT = function (dictMonad) {
+      return new Control_Apply.Apply(function () {
+          return functorStateT(((dictMonad.Bind1()).Apply0()).Functor0());
+      }, Control_Monad.ap(monadStateT(dictMonad)));
+  };
+  var applicativeStateT = function (dictMonad) {
+      return new Control_Applicative.Applicative(function () {
+          return applyStateT(dictMonad);
+      }, function (a) {
+          return function (s) {
+              return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Tuple.Tuple(a, s));
+          };
+      });
+  };
+  var monadAskStateT = function (dictMonadAsk) {
+      return new Control_Monad_Reader_Class.MonadAsk(function () {
+          return monadStateT(dictMonadAsk.Monad0());
+      }, Control_Monad_Trans_Class.lift(monadTransStateT)(dictMonadAsk.Monad0())(Control_Monad_Reader_Class.ask(dictMonadAsk)));
+  };
+  var monadStateStateT = function (dictMonad) {
+      return new Control_Monad_State_Class.MonadState(function () {
+          return monadStateT(dictMonad);
+      }, function (f) {
+          return StateT(function ($111) {
+              return Control_Applicative.pure(dictMonad.Applicative0())(f($111));
+          });
+      });
+  };
+  var monadTellStateT = function (dictMonadTell) {
+      return new Control_Monad_Writer_Class.MonadTell(function () {
+          return monadStateT(dictMonadTell.Monad0());
+      }, function ($112) {
+          return Control_Monad_Trans_Class.lift(monadTransStateT)(dictMonadTell.Monad0())(Control_Monad_Writer_Class.tell(dictMonadTell)($112));
+      });
+  };
+  var monadThrowStateT = function (dictMonadThrow) {
+      return new Control_Monad_Error_Class.MonadThrow(function () {
+          return monadStateT(dictMonadThrow.Monad0());
+      }, function (e) {
+          return Control_Monad_Trans_Class.lift(monadTransStateT)(dictMonadThrow.Monad0())(Control_Monad_Error_Class.throwError(dictMonadThrow)(e));
+      });
+  };
+  var altStateT = function (dictMonad) {
+      return function (dictAlt) {
+          return new Control_Alt.Alt(function () {
+              return functorStateT(dictAlt.Functor0());
+          }, function (v) {
+              return function (v1) {
+                  return function (s) {
+                      return Control_Alt.alt(dictAlt)(v(s))(v1(s));
+                  };
+              };
+          });
+      };
+  };
+  var plusStateT = function (dictMonad) {
+      return function (dictPlus) {
+          return new Control_Plus.Plus(function () {
+              return altStateT(dictMonad)(dictPlus.Alt0());
+          }, function (v) {
+              return Control_Plus.empty(dictPlus);
+          });
+      };
+  };
+  var alternativeStateT = function (dictMonad) {
+      return function (dictAlternative) {
+          return new Control_Alternative.Alternative(function () {
+              return applicativeStateT(dictMonad);
+          }, function () {
+              return plusStateT(dictMonad)(dictAlternative.Plus1());
+          });
+      };
+  };
+  var monadZeroStateT = function (dictMonadZero) {
+      return new Control_MonadZero.MonadZero(function () {
+          return alternativeStateT(dictMonadZero.Monad0())(dictMonadZero.Alternative1());
+      }, function () {
+          return monadStateT(dictMonadZero.Monad0());
+      });
+  };
+  exports["StateT"] = StateT;
+  exports["runStateT"] = runStateT;
+  exports["functorStateT"] = functorStateT;
+  exports["applyStateT"] = applyStateT;
+  exports["applicativeStateT"] = applicativeStateT;
+  exports["altStateT"] = altStateT;
+  exports["plusStateT"] = plusStateT;
+  exports["alternativeStateT"] = alternativeStateT;
+  exports["bindStateT"] = bindStateT;
+  exports["monadStateT"] = monadStateT;
+  exports["monadZeroStateT"] = monadZeroStateT;
+  exports["monadTransStateT"] = monadTransStateT;
+  exports["lazyStateT"] = lazyStateT;
+  exports["monadThrowStateT"] = monadThrowStateT;
+  exports["monadAskStateT"] = monadAskStateT;
+  exports["monadStateStateT"] = monadStateStateT;
+  exports["monadTellStateT"] = monadTellStateT;
+})(PS["Control.Monad.State.Trans"] = PS["Control.Monad.State.Trans"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Alt = PS["Control.Alt"];
+  var Control_Alternative = PS["Control.Alternative"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Monad = PS["Control.Monad"];
+  var Control_Monad_Cont_Class = PS["Control.Monad.Cont.Class"];
+  var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
+  var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
+  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
+  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
+  var Control_Monad_Trans_Class = PS["Control.Monad.Trans.Class"];
+  var Control_Monad_Writer_Class = PS["Control.Monad.Writer.Class"];
+  var Control_MonadPlus = PS["Control.MonadPlus"];
+  var Control_MonadZero = PS["Control.MonadZero"];
+  var Control_Plus = PS["Control.Plus"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Monoid = PS["Data.Monoid"];
+  var Data_Newtype = PS["Data.Newtype"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var Data_Unit = PS["Data.Unit"];
+  var Effect_Class = PS["Effect.Class"];
+  var Prelude = PS["Prelude"];                 
+  var WriterT = function (x) {
+      return x;
+  };
+  var runWriterT = function (v) {
+      return v;
+  };          
+  var monadTransWriterT = function (dictMonoid) {
+      return new Control_Monad_Trans_Class.MonadTrans(function (dictMonad) {
+          return function (m) {
+              return Control_Bind.bind(dictMonad.Bind1())(m)(function (v) {
+                  return Control_Applicative.pure(dictMonad.Applicative0())(new Data_Tuple.Tuple(v, Data_Monoid.mempty(dictMonoid)));
+              });
+          };
+      });
+  };
+  var mapWriterT = function (f) {
+      return function (v) {
+          return f(v);
+      };
+  };
+  var functorWriterT = function (dictFunctor) {
+      return new Data_Functor.Functor(function (f) {
+          return mapWriterT(Data_Functor.map(dictFunctor)(function (v) {
+              return new Data_Tuple.Tuple(f(v.value0), v.value1);
+          }));
+      });
+  };
+  var applyWriterT = function (dictSemigroup) {
+      return function (dictApply) {
+          return new Control_Apply.Apply(function () {
+              return functorWriterT(dictApply.Functor0());
+          }, function (v) {
+              return function (v1) {
+                  var k = function (v3) {
+                      return function (v4) {
+                          return new Data_Tuple.Tuple(v3.value0(v4.value0), Data_Semigroup.append(dictSemigroup)(v3.value1)(v4.value1));
+                      };
+                  };
+                  return Control_Apply.apply(dictApply)(Data_Functor.map(dictApply.Functor0())(k)(v))(v1);
+              };
+          });
+      };
+  };
+  var bindWriterT = function (dictSemigroup) {
+      return function (dictBind) {
+          return new Control_Bind.Bind(function () {
+              return applyWriterT(dictSemigroup)(dictBind.Apply0());
+          }, function (v) {
+              return function (k) {
+                  return WriterT(Control_Bind.bind(dictBind)(v)(function (v1) {
+                      var v2 = k(v1.value0);
+                      return Data_Functor.map((dictBind.Apply0()).Functor0())(function (v3) {
+                          return new Data_Tuple.Tuple(v3.value0, Data_Semigroup.append(dictSemigroup)(v1.value1)(v3.value1));
+                      })(v2);
+                  }));
+              };
+          });
+      };
+  };
+  var applicativeWriterT = function (dictMonoid) {
+      return function (dictApplicative) {
+          return new Control_Applicative.Applicative(function () {
+              return applyWriterT(dictMonoid.Semigroup0())(dictApplicative.Apply0());
+          }, function (a) {
+              return WriterT(Control_Applicative.pure(dictApplicative)(new Data_Tuple.Tuple(a, Data_Monoid.mempty(dictMonoid))));
+          });
+      };
+  };
+  var monadWriterT = function (dictMonoid) {
+      return function (dictMonad) {
+          return new Control_Monad.Monad(function () {
+              return applicativeWriterT(dictMonoid)(dictMonad.Applicative0());
+          }, function () {
+              return bindWriterT(dictMonoid.Semigroup0())(dictMonad.Bind1());
+          });
+      };
+  };
+  var monadAskWriterT = function (dictMonoid) {
+      return function (dictMonadAsk) {
+          return new Control_Monad_Reader_Class.MonadAsk(function () {
+              return monadWriterT(dictMonoid)(dictMonadAsk.Monad0());
+          }, Control_Monad_Trans_Class.lift(monadTransWriterT(dictMonoid))(dictMonadAsk.Monad0())(Control_Monad_Reader_Class.ask(dictMonadAsk)));
+      };
+  };
+  var monadTellWriterT = function (dictMonoid) {
+      return function (dictMonad) {
+          return new Control_Monad_Writer_Class.MonadTell(function () {
+              return monadWriterT(dictMonoid)(dictMonad);
+          }, function ($124) {
+              return WriterT(Control_Applicative.pure(dictMonad.Applicative0())(Data_Tuple.Tuple.create(Data_Unit.unit)($124)));
+          });
+      };
+  };
+  exports["WriterT"] = WriterT;
+  exports["runWriterT"] = runWriterT;
+  exports["mapWriterT"] = mapWriterT;
+  exports["functorWriterT"] = functorWriterT;
+  exports["applyWriterT"] = applyWriterT;
+  exports["applicativeWriterT"] = applicativeWriterT;
+  exports["bindWriterT"] = bindWriterT;
+  exports["monadWriterT"] = monadWriterT;
+  exports["monadTransWriterT"] = monadTransWriterT;
+  exports["monadAskWriterT"] = monadAskWriterT;
+  exports["monadTellWriterT"] = monadTellWriterT;
+})(PS["Control.Monad.Writer.Trans"] = PS["Control.Monad.Writer.Trans"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Alternative = PS["Control.Alternative"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Lazy = PS["Control.Lazy"];
+  var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Array = PS["Data.Array"];
+  var Data_Array_NonEmpty_Internal = PS["Data.Array.NonEmpty.Internal"];
+  var Data_Bifunctor = PS["Data.Bifunctor"];
+  var Data_Boolean = PS["Data.Boolean"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_Foldable = PS["Data.Foldable"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_NonEmpty = PS["Data.NonEmpty"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semigroup_Foldable = PS["Data.Semigroup.Foldable"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var Data_Unfoldable = PS["Data.Unfoldable"];
+  var Data_Unfoldable1 = PS["Data.Unfoldable1"];
+  var Partial_Unsafe = PS["Partial.Unsafe"];
+  var Prelude = PS["Prelude"];
+  var Unsafe_Coerce = PS["Unsafe.Coerce"];         
+  var toArray = Unsafe_Coerce.unsafeCoerce;  
+  var adaptAny = function (f) {
+      return function ($54) {
+          return f(toArray($54));
+      };
+  };
+  var index = adaptAny(Data_Array.index);
+  var length = adaptAny(Data_Array.length);
+  exports["toArray"] = toArray;
+  exports["length"] = length;
+  exports["index"] = index;
+})(PS["Data.Array.NonEmpty"] = PS["Data.Array.NonEmpty"] || {});
+(function(exports) {// module Data.BigInt
+
+  var bigInt = BigInt || require("big-integer");
+
+  function truncate(n) {
+    if (n > 0) return Math.floor(n);
+    return Math.ceil(n);
+  } 
+
+  exports.fromInt = function(n) {
+    return bigInt(n);
+  };
+
+  exports.toBase = function(base) {
+    return function (x) {
+      return x.toString(base);
+    };
+  };
+
+  exports.biAdd = function(x) {
+    return function(y) {
+      return x + y;
+    };
+  };
+
+  exports.biMul = function(x) {
+    return function(y) {
+      return x * y;
+    };
+  };
+
+  exports.biEquals = function(x) {
+    return function(y) {
+      return x == y;
+    };
+  };
+
+  exports.biCompare = function(x) {
+    return function(y) {
+      return x > y ? 1 : x == y ? 0 : -1;
+    };
+  };
+})(PS["Data.BigInt"] = PS["Data.BigInt"] || {});
+(function(exports) {
+    "use strict";
+
+  exports.fromStringAsImpl = function (just) {
+    return function (nothing) {
+      return function (radix) {
+        var digits;
+        if (radix < 11) {
+          digits = "[0-" + (radix - 1).toString() + "]";
+        } else if (radix === 11) {
+          digits = "[0-9a]";
+        } else {
+          digits = "[0-9a-" + String.fromCharCode(86 + radix) + "]";
+        }
+        var pattern = new RegExp("^[\\+\\-]?" + digits + "+$", "i");
+
+        return function (s) {
+          /* jshint bitwise: false */
+          if (pattern.test(s)) {
+            var i = parseInt(s, radix);
+            return (i | 0) === i ? just(i) : nothing;
+          } else {
+            return nothing;
+          }
+        };
+      };
+    };
+  };
+})(PS["Data.Int"] = PS["Data.Int"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var $foreign = PS["Data.Int"];
+  var Control_Category = PS["Control.Category"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Boolean = PS["Data.Boolean"];
+  var Data_Bounded = PS["Data.Bounded"];
+  var Data_CommutativeRing = PS["Data.CommutativeRing"];
+  var Data_DivisionRing = PS["Data.DivisionRing"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_EuclideanRing = PS["Data.EuclideanRing"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Int_Bits = PS["Data.Int.Bits"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ordering = PS["Data.Ordering"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Global = PS["Global"];
+  var $$Math = PS["Math"];
+  var Prelude = PS["Prelude"];
+  var fromStringAs = $foreign.fromStringAsImpl(Data_Maybe.Just.create)(Data_Maybe.Nothing.value);
+  var fromString = fromStringAs(10);
+  exports["fromString"] = fromString;
+  exports["fromStringAs"] = fromStringAs;
+})(PS["Data.Int"] = PS["Data.Int"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var $foreign = PS["Data.BigInt"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Array_NonEmpty = PS["Data.Array.NonEmpty"];
+  var Data_CommutativeRing = PS["Data.CommutativeRing"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_EuclideanRing = PS["Data.EuclideanRing"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Int = PS["Data.Int"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ordering = PS["Data.Ordering"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Data_String_NonEmpty = PS["Data.String.NonEmpty"];
+  var Data_String_NonEmpty_Internal = PS["Data.String.NonEmpty.Internal"];
+  var Partial_Unsafe = PS["Partial.Unsafe"];
+  var Prelude = PS["Prelude"];                 
+  var toString = $foreign.toBase(10);     
+  var showBigInt = new Data_Show.Show(function (x) {
+      return "fromString \"" + (toString(x) + "\"");
+  });
+  var semiringBigInt = new Data_Semiring.Semiring($foreign.biAdd, $foreign.biMul, $foreign.fromInt(1), $foreign.fromInt(0));
+  var eqBigInt = new Data_Eq.Eq($foreign.biEquals);
+  var ordBigInt = new Data_Ord.Ord(function () {
+      return eqBigInt;
+  }, function (x) {
+      return function (y) {
+          var v = $foreign.biCompare(x)(y);
+          if (v === 1) {
+              return Data_Ordering.GT.value;
+          };
+          if (v === 0) {
+              return Data_Ordering.EQ.value;
+          };
+          return Data_Ordering.LT.value;
+      };
+  });
+  exports["toString"] = toString;
+  exports["eqBigInt"] = eqBigInt;
+  exports["ordBigInt"] = ordBigInt;
+  exports["showBigInt"] = showBigInt;
+  exports["semiringBigInt"] = semiringBigInt;
+  exports["fromInt"] = $foreign.fromInt;
+})(PS["Data.BigInt"] = PS["Data.BigInt"] || {});
+(function(exports) {
+    "use strict";
+
+  exports.toCharCode = function (c) {
+    return c.charCodeAt(0);
+  };
+
+  exports.fromCharCode = function (c) {
+    return String.fromCharCode(c);
+  };
+})(PS["Data.Enum"] = PS["Data.Enum"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var $foreign = PS["Data.Enum"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_MonadPlus = PS["Control.MonadPlus"];
+  var Control_MonadZero = PS["Control.MonadZero"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Boolean = PS["Data.Boolean"];
+  var Data_Bounded = PS["Data.Bounded"];
+  var Data_Either = PS["Data.Either"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Newtype = PS["Data.Newtype"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ordering = PS["Data.Ordering"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var Data_Unfoldable = PS["Data.Unfoldable"];
+  var Data_Unfoldable1 = PS["Data.Unfoldable1"];
+  var Data_Unit = PS["Data.Unit"];
+  var Partial_Unsafe = PS["Partial.Unsafe"];
+  var Prelude = PS["Prelude"];
+  var Enum = function (Ord0, pred, succ) {
+      this.Ord0 = Ord0;
+      this.pred = pred;
+      this.succ = succ;
+  };
+  var BoundedEnum = function (Bounded0, Enum1, cardinality, fromEnum, toEnum) {
+      this.Bounded0 = Bounded0;
+      this.Enum1 = Enum1;
+      this.cardinality = cardinality;
+      this.fromEnum = fromEnum;
+      this.toEnum = toEnum;
+  };
+  var toEnum = function (dict) {
+      return dict.toEnum;
+  };
+  var succ = function (dict) {
+      return dict.succ;
+  }; 
+  var pred = function (dict) {
+      return dict.pred;
+  };              
+  var fromEnum = function (dict) {
+      return dict.fromEnum;
+  };
+  var toEnumWithDefaults = function (dictBoundedEnum) {
+      return function (low) {
+          return function (high) {
+              return function (x) {
+                  var v = toEnum(dictBoundedEnum)(x);
+                  if (v instanceof Data_Maybe.Just) {
+                      return v.value0;
+                  };
+                  if (v instanceof Data_Maybe.Nothing) {
+                      var $51 = x < fromEnum(dictBoundedEnum)(Data_Bounded.bottom(dictBoundedEnum.Bounded0()));
+                      if ($51) {
+                          return low;
+                      };
+                      return high;
+                  };
+                  throw new Error("Failed pattern match at Data.Enum line 158, column 33 - line 160, column 62: " + [ v.constructor.name ]);
+              };
+          };
+      };
+  };
+  var defaultSucc = function (toEnum$prime) {
+      return function (fromEnum$prime) {
+          return function (a) {
+              return toEnum$prime(fromEnum$prime(a) + 1 | 0);
+          };
+      };
+  };
+  var defaultPred = function (toEnum$prime) {
+      return function (fromEnum$prime) {
+          return function (a) {
+              return toEnum$prime(fromEnum$prime(a) - 1 | 0);
+          };
+      };
+  };
+  var charToEnum = function (v) {
+      if (v >= Data_Bounded.bottom(Data_Bounded.boundedInt) && v <= Data_Bounded.top(Data_Bounded.boundedInt)) {
+          return new Data_Maybe.Just($foreign.fromCharCode(v));
+      };
+      return Data_Maybe.Nothing.value;
+  };
+  var enumChar = new Enum(function () {
+      return Data_Ord.ordChar;
+  }, defaultPred(charToEnum)($foreign.toCharCode), defaultSucc(charToEnum)($foreign.toCharCode));
+  var cardinality = function (dict) {
+      return dict.cardinality;
+  }; 
+  var boundedEnumChar = new BoundedEnum(function () {
+      return Data_Bounded.boundedChar;
+  }, function () {
+      return enumChar;
+  }, $foreign.toCharCode(Data_Bounded.top(Data_Bounded.boundedChar)) - $foreign.toCharCode(Data_Bounded.bottom(Data_Bounded.boundedChar)) | 0, $foreign.toCharCode, charToEnum);
+  exports["Enum"] = Enum;
+  exports["succ"] = succ;
+  exports["pred"] = pred;
+  exports["BoundedEnum"] = BoundedEnum;
+  exports["cardinality"] = cardinality;
+  exports["toEnum"] = toEnum;
+  exports["fromEnum"] = fromEnum;
+  exports["toEnumWithDefaults"] = toEnumWithDefaults;
+  exports["defaultSucc"] = defaultSucc;
+  exports["defaultPred"] = defaultPred;
+  exports["enumChar"] = enumChar;
+  exports["boundedEnumChar"] = boundedEnumChar;
+})(PS["Data.Enum"] = PS["Data.Enum"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Data_Enum = PS["Data.Enum"];
+  var Data_Maybe = PS["Data.Maybe"];                 
+  var toCharCode = Data_Enum.fromEnum(Data_Enum.boundedEnumChar);
+  exports["toCharCode"] = toCharCode;
+})(PS["Data.Char"] = PS["Data.Char"] || {});
+(function(exports) {
+    "use strict";
+
+  var createDate = function (y, m, d) {
+    var date = new Date(Date.UTC(y, m, d));
+    if (y >= 0 && y < 100) {
+      date.setUTCFullYear(y);
+    }
+    return date;
+  };
+
+  exports.canonicalDateImpl = function (ctor, y, m, d) {
+    var date = createDate(y, m - 1, d);
+    return ctor(date.getUTCFullYear())(date.getUTCMonth() + 1)(date.getUTCDate());
+  };
+})(PS["Data.Date"] = PS["Data.Date"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Boolean = PS["Data.Boolean"];
+  var Data_Bounded = PS["Data.Bounded"];
+  var Data_Enum = PS["Data.Enum"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ordering = PS["Data.Ordering"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Prelude = PS["Prelude"];
+  var January = (function () {
+      function January() {
+
+      };
+      January.value = new January();
+      return January;
+  })();
+  var February = (function () {
+      function February() {
+
+      };
+      February.value = new February();
+      return February;
+  })();
+  var March = (function () {
+      function March() {
+
+      };
+      March.value = new March();
+      return March;
+  })();
+  var April = (function () {
+      function April() {
+
+      };
+      April.value = new April();
+      return April;
+  })();
+  var May = (function () {
+      function May() {
+
+      };
+      May.value = new May();
+      return May;
+  })();
+  var June = (function () {
+      function June() {
+
+      };
+      June.value = new June();
+      return June;
+  })();
+  var July = (function () {
+      function July() {
+
+      };
+      July.value = new July();
+      return July;
+  })();
+  var August = (function () {
+      function August() {
+
+      };
+      August.value = new August();
+      return August;
+  })();
+  var September = (function () {
+      function September() {
+
+      };
+      September.value = new September();
+      return September;
+  })();
+  var October = (function () {
+      function October() {
+
+      };
+      October.value = new October();
+      return October;
+  })();
+  var November = (function () {
+      function November() {
+
+      };
+      November.value = new November();
+      return November;
+  })();
+  var December = (function () {
+      function December() {
+
+      };
+      December.value = new December();
+      return December;
+  })();
+  var ordYear = Data_Ord.ordInt;
+  var ordDay = Data_Ord.ordInt;
+  var eqYear = Data_Eq.eqInt;
+  var eqMonth = new Data_Eq.Eq(function (x) {
+      return function (y) {
+          if (x instanceof January && y instanceof January) {
+              return true;
+          };
+          if (x instanceof February && y instanceof February) {
+              return true;
+          };
+          if (x instanceof March && y instanceof March) {
+              return true;
+          };
+          if (x instanceof April && y instanceof April) {
+              return true;
+          };
+          if (x instanceof May && y instanceof May) {
+              return true;
+          };
+          if (x instanceof June && y instanceof June) {
+              return true;
+          };
+          if (x instanceof July && y instanceof July) {
+              return true;
+          };
+          if (x instanceof August && y instanceof August) {
+              return true;
+          };
+          if (x instanceof September && y instanceof September) {
+              return true;
+          };
+          if (x instanceof October && y instanceof October) {
+              return true;
+          };
+          if (x instanceof November && y instanceof November) {
+              return true;
+          };
+          if (x instanceof December && y instanceof December) {
+              return true;
+          };
+          return false;
+      };
+  });
+  var ordMonth = new Data_Ord.Ord(function () {
+      return eqMonth;
+  }, function (x) {
+      return function (y) {
+          if (x instanceof January && y instanceof January) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof January) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof January) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof February && y instanceof February) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof February) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof February) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof March && y instanceof March) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof March) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof March) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof April && y instanceof April) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof April) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof April) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof May && y instanceof May) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof May) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof May) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof June && y instanceof June) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof June) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof June) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof July && y instanceof July) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof July) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof July) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof August && y instanceof August) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof August) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof August) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof September && y instanceof September) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof September) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof September) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof October && y instanceof October) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof October) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof October) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof November && y instanceof November) {
+              return Data_Ordering.EQ.value;
+          };
+          if (x instanceof November) {
+              return Data_Ordering.LT.value;
+          };
+          if (y instanceof November) {
+              return Data_Ordering.GT.value;
+          };
+          if (x instanceof December && y instanceof December) {
+              return Data_Ordering.EQ.value;
+          };
+          throw new Error("Failed pattern match at Data.Date.Component line 61, column 8 - line 61, column 38: " + [ x.constructor.name, y.constructor.name ]);
+      };
+  });
+  var eqDay = Data_Eq.eqInt;
+  var boundedYear = new Data_Bounded.Bounded(function () {
+      return ordYear;
+  }, -271820 | 0, 275759);       
+  var boundedMonth = new Data_Bounded.Bounded(function () {
+      return ordMonth;
+  }, January.value, December.value);
+  var boundedEnumYear = new Data_Enum.BoundedEnum(function () {
+      return boundedYear;
+  }, function () {
+      return enumYear;
+  }, 547580, function (v) {
+      return v;
+  }, function (n) {
+      if (n >= (-271821 | 0) && n <= 275759) {
+          return new Data_Maybe.Just(n);
+      };
+      if (Data_Boolean.otherwise) {
+          return Data_Maybe.Nothing.value;
+      };
+      throw new Error("Failed pattern match at Data.Date.Component line 35, column 1 - line 35, column 45: " + [ n.constructor.name ]);
+  });
+  var enumYear = new Data_Enum.Enum(function () {
+      return ordYear;
+  }, function ($46) {
+      return Data_Enum.toEnum(boundedEnumYear)((function (v) {
+          return v - 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumYear)($46)));
+  }, function ($47) {
+      return Data_Enum.toEnum(boundedEnumYear)((function (v) {
+          return v + 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumYear)($47)));
+  });
+  var boundedEnumMonth = new Data_Enum.BoundedEnum(function () {
+      return boundedMonth;
+  }, function () {
+      return enumMonth;
+  }, 12, function (v) {
+      if (v instanceof January) {
+          return 1;
+      };
+      if (v instanceof February) {
+          return 2;
+      };
+      if (v instanceof March) {
+          return 3;
+      };
+      if (v instanceof April) {
+          return 4;
+      };
+      if (v instanceof May) {
+          return 5;
+      };
+      if (v instanceof June) {
+          return 6;
+      };
+      if (v instanceof July) {
+          return 7;
+      };
+      if (v instanceof August) {
+          return 8;
+      };
+      if (v instanceof September) {
+          return 9;
+      };
+      if (v instanceof October) {
+          return 10;
+      };
+      if (v instanceof November) {
+          return 11;
+      };
+      if (v instanceof December) {
+          return 12;
+      };
+      throw new Error("Failed pattern match at Data.Date.Component line 87, column 14 - line 101, column 1: " + [ v.constructor.name ]);
+  }, function (v) {
+      if (v === 1) {
+          return new Data_Maybe.Just(January.value);
+      };
+      if (v === 2) {
+          return new Data_Maybe.Just(February.value);
+      };
+      if (v === 3) {
+          return new Data_Maybe.Just(March.value);
+      };
+      if (v === 4) {
+          return new Data_Maybe.Just(April.value);
+      };
+      if (v === 5) {
+          return new Data_Maybe.Just(May.value);
+      };
+      if (v === 6) {
+          return new Data_Maybe.Just(June.value);
+      };
+      if (v === 7) {
+          return new Data_Maybe.Just(July.value);
+      };
+      if (v === 8) {
+          return new Data_Maybe.Just(August.value);
+      };
+      if (v === 9) {
+          return new Data_Maybe.Just(September.value);
+      };
+      if (v === 10) {
+          return new Data_Maybe.Just(October.value);
+      };
+      if (v === 11) {
+          return new Data_Maybe.Just(November.value);
+      };
+      if (v === 12) {
+          return new Data_Maybe.Just(December.value);
+      };
+      return Data_Maybe.Nothing.value;
+  });
+  var enumMonth = new Data_Enum.Enum(function () {
+      return ordMonth;
+  }, function ($50) {
+      return Data_Enum.toEnum(boundedEnumMonth)((function (v) {
+          return v - 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumMonth)($50)));
+  }, function ($51) {
+      return Data_Enum.toEnum(boundedEnumMonth)((function (v) {
+          return v + 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumMonth)($51)));
+  });
+  var boundedDay = new Data_Bounded.Bounded(function () {
+      return ordDay;
+  }, 1, 31);
+  var boundedEnumDay = new Data_Enum.BoundedEnum(function () {
+      return boundedDay;
+  }, function () {
+      return enumDay;
+  }, 31, function (v) {
+      return v;
+  }, function (n) {
+      if (n >= 1 && n <= 31) {
+          return new Data_Maybe.Just(n);
+      };
+      if (Data_Boolean.otherwise) {
+          return Data_Maybe.Nothing.value;
+      };
+      throw new Error("Failed pattern match at Data.Date.Component line 133, column 1 - line 133, column 43: " + [ n.constructor.name ]);
+  });
+  var enumDay = new Data_Enum.Enum(function () {
+      return ordDay;
+  }, function ($52) {
+      return Data_Enum.toEnum(boundedEnumDay)((function (v) {
+          return v - 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumDay)($52)));
+  }, function ($53) {
+      return Data_Enum.toEnum(boundedEnumDay)((function (v) {
+          return v + 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumDay)($53)));
+  });
+  exports["January"] = January;
+  exports["February"] = February;
+  exports["March"] = March;
+  exports["April"] = April;
+  exports["May"] = May;
+  exports["June"] = June;
+  exports["July"] = July;
+  exports["August"] = August;
+  exports["September"] = September;
+  exports["October"] = October;
+  exports["November"] = November;
+  exports["December"] = December;
+  exports["eqYear"] = eqYear;
+  exports["ordYear"] = ordYear;
+  exports["boundedYear"] = boundedYear;
+  exports["enumYear"] = enumYear;
+  exports["boundedEnumYear"] = boundedEnumYear;
+  exports["eqMonth"] = eqMonth;
+  exports["ordMonth"] = ordMonth;
+  exports["boundedMonth"] = boundedMonth;
+  exports["enumMonth"] = enumMonth;
+  exports["boundedEnumMonth"] = boundedEnumMonth;
+  exports["eqDay"] = eqDay;
+  exports["ordDay"] = ordDay;
+  exports["boundedDay"] = boundedDay;
+  exports["enumDay"] = enumDay;
+  exports["boundedEnumDay"] = boundedEnumDay;
+})(PS["Data.Date.Component"] = PS["Data.Date.Component"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Category = PS["Control.Category"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_EuclideanRing = PS["Data.EuclideanRing"];
+  var Data_Monoid = PS["Data.Monoid"];
+  var Data_Newtype = PS["Data.Newtype"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Prelude = PS["Prelude"];
+  var Minutes = function (x) {
+      return x;
+  };
+  var Milliseconds = function (x) {
+      return x;
+  };
+  var Duration = function (fromDuration, toDuration) {
+      this.fromDuration = fromDuration;
+      this.toDuration = toDuration;
+  };
+  var toDuration = function (dict) {
+      return dict.toDuration;
+  };          
+  var newtypeMinutes = new Data_Newtype.Newtype(function (n) {
+      return n;
+  }, Minutes);
+  var newtypeMilliseconds = new Data_Newtype.Newtype(function (n) {
+      return n;
+  }, Milliseconds);
+  var fromDuration = function (dict) {
+      return dict.fromDuration;
+  };  
+  var durationMinutes = new Duration(Data_Newtype.over(newtypeMinutes)(newtypeMilliseconds)(Minutes)(function (v) {
+      return v * 60000.0;
+  }), Data_Newtype.over(newtypeMilliseconds)(newtypeMinutes)(Milliseconds)(function (v) {
+      return v / 60000.0;
+  }));
+  exports["fromDuration"] = fromDuration;
+  exports["toDuration"] = toDuration;
+  exports["Milliseconds"] = Milliseconds;
+  exports["Minutes"] = Minutes;
+  exports["Duration"] = Duration;
+  exports["newtypeMilliseconds"] = newtypeMilliseconds;
+  exports["newtypeMinutes"] = newtypeMinutes;
+  exports["durationMinutes"] = durationMinutes;
+})(PS["Data.Time.Duration"] = PS["Data.Time.Duration"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var $foreign = PS["Data.Date"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Boolean = PS["Data.Boolean"];
+  var Data_Bounded = PS["Data.Bounded"];
+  var Data_Date_Component = PS["Data.Date.Component"];
+  var Data_Enum = PS["Data.Enum"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_EuclideanRing = PS["Data.EuclideanRing"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Function_Uncurried = PS["Data.Function.Uncurried"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Int = PS["Data.Int"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ordering = PS["Data.Ordering"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Data_Time_Duration = PS["Data.Time.Duration"];
+  var Partial_Unsafe = PS["Partial.Unsafe"];
+  var Prelude = PS["Prelude"];                 
+  var $$Date = (function () {
+      function $$Date(value0, value1, value2) {
+          this.value0 = value0;
+          this.value1 = value1;
+          this.value2 = value2;
+      };
+      $$Date.create = function (value0) {
+          return function (value1) {
+              return function (value2) {
+                  return new $$Date(value0, value1, value2);
+              };
+          };
+      };
+      return $$Date;
+  })();
+  var year = function (v) {
+      return v.value0;
+  }; 
+  var month = function (v) {
+      return v.value1;
+  };
+  var eqDate = new Data_Eq.Eq(function (x) {
+      return function (y) {
+          return Data_Eq.eq(Data_Date_Component.eqYear)(x.value0)(y.value0) && Data_Eq.eq(Data_Date_Component.eqMonth)(x.value1)(y.value1) && Data_Eq.eq(Data_Date_Component.eqDay)(x.value2)(y.value2);
+      };
+  });
+  var ordDate = new Data_Ord.Ord(function () {
+      return eqDate;
+  }, function (x) {
+      return function (y) {
+          var v = Data_Ord.compare(Data_Date_Component.ordYear)(x.value0)(y.value0);
+          if (v instanceof Data_Ordering.LT) {
+              return Data_Ordering.LT.value;
+          };
+          if (v instanceof Data_Ordering.GT) {
+              return Data_Ordering.GT.value;
+          };
+          var v1 = Data_Ord.compare(Data_Date_Component.ordMonth)(x.value1)(y.value1);
+          if (v1 instanceof Data_Ordering.LT) {
+              return Data_Ordering.LT.value;
+          };
+          if (v1 instanceof Data_Ordering.GT) {
+              return Data_Ordering.GT.value;
+          };
+          return Data_Ord.compare(Data_Date_Component.ordDay)(x.value2)(y.value2);
+      };
+  });
+  var day = function (v) {
+      return v.value2;
+  };
+  var canonicalDate = function (y) {
+      return function (m) {
+          return function (d) {
+              var mkDate = function (y$prime) {
+                  return function (m$prime) {
+                      return function (d$prime) {
+                          return new $$Date(y$prime, Data_Maybe.fromJust()(Data_Enum.toEnum(Data_Date_Component.boundedEnumMonth)(m$prime)), d$prime);
+                      };
+                  };
+              };
+              return $foreign.canonicalDateImpl(mkDate, y, Data_Enum.fromEnum(Data_Date_Component.boundedEnumMonth)(m), d);
+          };
+      };
+  };
+  var exactDate = function (y) {
+      return function (m) {
+          return function (d) {
+              var dt = new $$Date(y, m, d);
+              var $99 = Data_Eq.eq(eqDate)(canonicalDate(y)(m)(d))(dt);
+              if ($99) {
+                  return new Data_Maybe.Just(dt);
+              };
+              return Data_Maybe.Nothing.value;
+          };
+      };
+  };
+  exports["canonicalDate"] = canonicalDate;
+  exports["exactDate"] = exactDate;
+  exports["year"] = year;
+  exports["month"] = month;
+  exports["day"] = day;
+  exports["eqDate"] = eqDate;
+  exports["ordDate"] = ordDate;
+})(PS["Data.Date"] = PS["Data.Date"] || {});
+(function(exports) {
+    "use strict";
+
+  var createUTC = function (y, mo, d, h, m, s, ms) {
+    var date = new Date(Date.UTC(y, mo, d, h, m, s, ms));
+    if (y >= 0 && y < 100) {
+      date.setUTCFullYear(y);
+    }
+    return date.getTime();
+  };
+
+  exports.calcDiff = function (rec1, rec2) {
+    var msUTC1 = createUTC(rec1.year, rec1.month - 1, rec1.day, rec1.hour, rec1.minute, rec1.second, rec1.millisecond);
+    var msUTC2 = createUTC(rec2.year, rec2.month - 1, rec2.day, rec2.hour, rec2.minute, rec2.second, rec2.millisecond);
+    return msUTC1 - msUTC2;
+  };
+})(PS["Data.DateTime"] = PS["Data.DateTime"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Semigroupoid = PS["Control.Semigroupoid"];
+  var Data_Boolean = PS["Data.Boolean"];
+  var Data_Bounded = PS["Data.Bounded"];
+  var Data_Enum = PS["Data.Enum"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Prelude = PS["Prelude"];
+  var ordSecond = Data_Ord.ordInt;
+  var ordMinute = Data_Ord.ordInt;
+  var ordMillisecond = Data_Ord.ordInt;
+  var ordHour = Data_Ord.ordInt;
+  var eqSecond = Data_Eq.eqInt;
+  var eqMinute = Data_Eq.eqInt;
+  var eqMillisecond = Data_Eq.eqInt;
+  var eqHour = Data_Eq.eqInt;
+  var boundedSecond = new Data_Bounded.Bounded(function () {
+      return ordSecond;
+  }, 0, 59);
+  var boundedMinute = new Data_Bounded.Bounded(function () {
+      return ordMinute;
+  }, 0, 59);
+  var boundedMillisecond = new Data_Bounded.Bounded(function () {
+      return ordMillisecond;
+  }, 0, 999);
+  var boundedHour = new Data_Bounded.Bounded(function () {
+      return ordHour;
+  }, 0, 23);
+  var boundedEnumSecond = new Data_Enum.BoundedEnum(function () {
+      return boundedSecond;
+  }, function () {
+      return enumSecond;
+  }, 60, function (v) {
+      return v;
+  }, function (n) {
+      if (n >= 0 && n <= 59) {
+          return new Data_Maybe.Just(n);
+      };
+      if (Data_Boolean.otherwise) {
+          return Data_Maybe.Nothing.value;
+      };
+      throw new Error("Failed pattern match at Data.Time.Component line 90, column 1 - line 90, column 49: " + [ n.constructor.name ]);
+  });
+  var enumSecond = new Data_Enum.Enum(function () {
+      return ordSecond;
+  }, function ($28) {
+      return Data_Enum.toEnum(boundedEnumSecond)((function (v) {
+          return v - 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumSecond)($28)));
+  }, function ($29) {
+      return Data_Enum.toEnum(boundedEnumSecond)((function (v) {
+          return v + 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumSecond)($29)));
+  });
+  var boundedEnumMinute = new Data_Enum.BoundedEnum(function () {
+      return boundedMinute;
+  }, function () {
+      return enumMinute;
+  }, 60, function (v) {
+      return v;
+  }, function (n) {
+      if (n >= 0 && n <= 59) {
+          return new Data_Maybe.Just(n);
+      };
+      if (Data_Boolean.otherwise) {
+          return Data_Maybe.Nothing.value;
+      };
+      throw new Error("Failed pattern match at Data.Time.Component line 61, column 1 - line 61, column 49: " + [ n.constructor.name ]);
+  });
+  var enumMinute = new Data_Enum.Enum(function () {
+      return ordMinute;
+  }, function ($30) {
+      return Data_Enum.toEnum(boundedEnumMinute)((function (v) {
+          return v - 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumMinute)($30)));
+  }, function ($31) {
+      return Data_Enum.toEnum(boundedEnumMinute)((function (v) {
+          return v + 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumMinute)($31)));
+  });
+  var boundedEnumMillisecond = new Data_Enum.BoundedEnum(function () {
+      return boundedMillisecond;
+  }, function () {
+      return enumMillisecond;
+  }, 1000, function (v) {
+      return v;
+  }, function (n) {
+      if (n >= 0 && n <= 999) {
+          return new Data_Maybe.Just(n);
+      };
+      if (Data_Boolean.otherwise) {
+          return Data_Maybe.Nothing.value;
+      };
+      throw new Error("Failed pattern match at Data.Time.Component line 120, column 1 - line 120, column 59: " + [ n.constructor.name ]);
+  });
+  var enumMillisecond = new Data_Enum.Enum(function () {
+      return ordMillisecond;
+  }, function ($32) {
+      return Data_Enum.toEnum(boundedEnumMillisecond)((function (v) {
+          return v - 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumMillisecond)($32)));
+  }, function ($33) {
+      return Data_Enum.toEnum(boundedEnumMillisecond)((function (v) {
+          return v + 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumMillisecond)($33)));
+  });
+  var boundedEnumHour = new Data_Enum.BoundedEnum(function () {
+      return boundedHour;
+  }, function () {
+      return enumHour;
+  }, 24, function (v) {
+      return v;
+  }, function (n) {
+      if (n >= 0 && n <= 23) {
+          return new Data_Maybe.Just(n);
+      };
+      if (Data_Boolean.otherwise) {
+          return Data_Maybe.Nothing.value;
+      };
+      throw new Error("Failed pattern match at Data.Time.Component line 32, column 1 - line 32, column 45: " + [ n.constructor.name ]);
+  });
+  var enumHour = new Data_Enum.Enum(function () {
+      return ordHour;
+  }, function ($34) {
+      return Data_Enum.toEnum(boundedEnumHour)((function (v) {
+          return v - 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumHour)($34)));
+  }, function ($35) {
+      return Data_Enum.toEnum(boundedEnumHour)((function (v) {
+          return v + 1 | 0;
+      })(Data_Enum.fromEnum(boundedEnumHour)($35)));
+  });
+  exports["eqHour"] = eqHour;
+  exports["ordHour"] = ordHour;
+  exports["boundedHour"] = boundedHour;
+  exports["enumHour"] = enumHour;
+  exports["boundedEnumHour"] = boundedEnumHour;
+  exports["eqMinute"] = eqMinute;
+  exports["ordMinute"] = ordMinute;
+  exports["boundedMinute"] = boundedMinute;
+  exports["enumMinute"] = enumMinute;
+  exports["boundedEnumMinute"] = boundedEnumMinute;
+  exports["eqSecond"] = eqSecond;
+  exports["ordSecond"] = ordSecond;
+  exports["boundedSecond"] = boundedSecond;
+  exports["enumSecond"] = enumSecond;
+  exports["boundedEnumSecond"] = boundedEnumSecond;
+  exports["eqMillisecond"] = eqMillisecond;
+  exports["ordMillisecond"] = ordMillisecond;
+  exports["boundedMillisecond"] = boundedMillisecond;
+  exports["enumMillisecond"] = enumMillisecond;
+  exports["boundedEnumMillisecond"] = boundedEnumMillisecond;
+})(PS["Data.Time.Component"] = PS["Data.Time.Component"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Apply = PS["Control.Apply"];
+  var Data_Bounded = PS["Data.Bounded"];
+  var Data_Enum = PS["Data.Enum"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_EuclideanRing = PS["Data.EuclideanRing"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Int = PS["Data.Int"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Newtype = PS["Data.Newtype"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ordering = PS["Data.Ordering"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Data_Time_Component = PS["Data.Time.Component"];
+  var Data_Time_Duration = PS["Data.Time.Duration"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var $$Math = PS["Math"];
+  var Partial_Unsafe = PS["Partial.Unsafe"];
+  var Prelude = PS["Prelude"];                 
+  var Time = (function () {
+      function Time(value0, value1, value2, value3) {
+          this.value0 = value0;
+          this.value1 = value1;
+          this.value2 = value2;
+          this.value3 = value3;
+      };
+      Time.create = function (value0) {
+          return function (value1) {
+              return function (value2) {
+                  return function (value3) {
+                      return new Time(value0, value1, value2, value3);
+                  };
+              };
+          };
+      };
+      return Time;
+  })();
+  var second = function (v) {
+      return v.value2;
+  };
+  var minute = function (v) {
+      return v.value1;
+  };
+  var millisecond = function (v) {
+      return v.value3;
+  };
+  var hour = function (v) {
+      return v.value0;
+  };
+  var eqTime = new Data_Eq.Eq(function (x) {
+      return function (y) {
+          return Data_Eq.eq(Data_Time_Component.eqHour)(x.value0)(y.value0) && Data_Eq.eq(Data_Time_Component.eqMinute)(x.value1)(y.value1) && Data_Eq.eq(Data_Time_Component.eqSecond)(x.value2)(y.value2) && Data_Eq.eq(Data_Time_Component.eqMillisecond)(x.value3)(y.value3);
+      };
+  });
+  var ordTime = new Data_Ord.Ord(function () {
+      return eqTime;
+  }, function (x) {
+      return function (y) {
+          var v = Data_Ord.compare(Data_Time_Component.ordHour)(x.value0)(y.value0);
+          if (v instanceof Data_Ordering.LT) {
+              return Data_Ordering.LT.value;
+          };
+          if (v instanceof Data_Ordering.GT) {
+              return Data_Ordering.GT.value;
+          };
+          var v1 = Data_Ord.compare(Data_Time_Component.ordMinute)(x.value1)(y.value1);
+          if (v1 instanceof Data_Ordering.LT) {
+              return Data_Ordering.LT.value;
+          };
+          if (v1 instanceof Data_Ordering.GT) {
+              return Data_Ordering.GT.value;
+          };
+          var v2 = Data_Ord.compare(Data_Time_Component.ordSecond)(x.value2)(y.value2);
+          if (v2 instanceof Data_Ordering.LT) {
+              return Data_Ordering.LT.value;
+          };
+          if (v2 instanceof Data_Ordering.GT) {
+              return Data_Ordering.GT.value;
+          };
+          return Data_Ord.compare(Data_Time_Component.ordMillisecond)(x.value3)(y.value3);
+      };
+  });
+  exports["Time"] = Time;
+  exports["hour"] = hour;
+  exports["minute"] = minute;
+  exports["second"] = second;
+  exports["millisecond"] = millisecond;
+  exports["eqTime"] = eqTime;
+  exports["ordTime"] = ordTime;
+})(PS["Data.Time"] = PS["Data.Time"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var $foreign = PS["Data.DateTime"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Data_Bounded = PS["Data.Bounded"];
+  var Data_Date = PS["Data.Date"];
+  var Data_Date_Component = PS["Data.Date.Component"];
+  var Data_Enum = PS["Data.Enum"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Function_Uncurried = PS["Data.Function.Uncurried"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ordering = PS["Data.Ordering"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Show = PS["Data.Show"];
+  var Data_Time = PS["Data.Time"];
+  var Data_Time_Component = PS["Data.Time.Component"];
+  var Data_Time_Duration = PS["Data.Time.Duration"];
+  var Prelude = PS["Prelude"];                 
+  var DateTime = (function () {
+      function DateTime(value0, value1) {
+          this.value0 = value0;
+          this.value1 = value1;
+      };
+      DateTime.create = function (value0) {
+          return function (value1) {
+              return new DateTime(value0, value1);
+          };
+      };
+      return DateTime;
+  })();
+  var toRecord = function (v) {
+      return {
+          year: Data_Enum.fromEnum(Data_Date_Component.boundedEnumYear)(Data_Date.year(v.value0)),
+          month: Data_Enum.fromEnum(Data_Date_Component.boundedEnumMonth)(Data_Date.month(v.value0)),
+          day: Data_Enum.fromEnum(Data_Date_Component.boundedEnumDay)(Data_Date.day(v.value0)),
+          hour: Data_Enum.fromEnum(Data_Time_Component.boundedEnumHour)(Data_Time.hour(v.value1)),
+          minute: Data_Enum.fromEnum(Data_Time_Component.boundedEnumMinute)(Data_Time.minute(v.value1)),
+          second: Data_Enum.fromEnum(Data_Time_Component.boundedEnumSecond)(Data_Time.second(v.value1)),
+          millisecond: Data_Enum.fromEnum(Data_Time_Component.boundedEnumMillisecond)(Data_Time.millisecond(v.value1))
+      };
+  };
+  var time = function (v) {
+      return v.value1;
+  };
+  var eqDateTime = new Data_Eq.Eq(function (x) {
+      return function (y) {
+          return Data_Eq.eq(Data_Date.eqDate)(x.value0)(y.value0) && Data_Eq.eq(Data_Time.eqTime)(x.value1)(y.value1);
+      };
+  });
+  var ordDateTime = new Data_Ord.Ord(function () {
+      return eqDateTime;
+  }, function (x) {
+      return function (y) {
+          var v = Data_Ord.compare(Data_Date.ordDate)(x.value0)(y.value0);
+          if (v instanceof Data_Ordering.LT) {
+              return Data_Ordering.LT.value;
+          };
+          if (v instanceof Data_Ordering.GT) {
+              return Data_Ordering.GT.value;
+          };
+          return Data_Ord.compare(Data_Time.ordTime)(x.value1)(y.value1);
+      };
+  });
+  var diff = function (dictDuration) {
+      return function (dt1) {
+          return function (dt2) {
+              return Data_Time_Duration.toDuration(dictDuration)($foreign.calcDiff(toRecord(dt1), toRecord(dt2)));
+          };
+      };
+  };
+  exports["DateTime"] = DateTime;
+  exports["time"] = time;
+  exports["diff"] = diff;
+  exports["eqDateTime"] = eqDateTime;
+  exports["ordDateTime"] = ordDateTime;
+})(PS["Data.DateTime"] = PS["Data.DateTime"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Alt = PS["Control.Alt"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Comonad = PS["Control.Comonad"];
+  var Control_Extend = PS["Control.Extend"];
+  var Control_Lazy = PS["Control.Lazy"];
+  var Control_Monad = PS["Control.Monad"];
+  var Data_BooleanAlgebra = PS["Data.BooleanAlgebra"];
+  var Data_Bounded = PS["Data.Bounded"];
+  var Data_CommutativeRing = PS["Data.CommutativeRing"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_EuclideanRing = PS["Data.EuclideanRing"];
+  var Data_Foldable = PS["Data.Foldable"];
+  var Data_FoldableWithIndex = PS["Data.FoldableWithIndex"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Functor_Invariant = PS["Data.Functor.Invariant"];
+  var Data_FunctorWithIndex = PS["Data.FunctorWithIndex"];
+  var Data_HeytingAlgebra = PS["Data.HeytingAlgebra"];
+  var Data_Monoid = PS["Data.Monoid"];
+  var Data_Newtype = PS["Data.Newtype"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semigroup_Foldable = PS["Data.Semigroup.Foldable"];
+  var Data_Semigroup_Traversable = PS["Data.Semigroup.Traversable"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Data_Traversable = PS["Data.Traversable"];
+  var Data_TraversableWithIndex = PS["Data.TraversableWithIndex"];
+  var Data_Unit = PS["Data.Unit"];
+  var Prelude = PS["Prelude"];                 
+  var Identity = function (x) {
+      return x;
+  };
+  var newtypeIdentity = new Data_Newtype.Newtype(function (n) {
+      return n;
+  }, Identity);
+  var functorIdentity = new Data_Functor.Functor(function (f) {
+      return function (m) {
+          return f(m);
+      };
+  });
+  var applyIdentity = new Control_Apply.Apply(function () {
+      return functorIdentity;
+  }, function (v) {
+      return function (v1) {
+          return v(v1);
+      };
+  });
+  var bindIdentity = new Control_Bind.Bind(function () {
+      return applyIdentity;
+  }, function (v) {
+      return function (f) {
+          return f(v);
+      };
+  });
+  var applicativeIdentity = new Control_Applicative.Applicative(function () {
+      return applyIdentity;
+  }, Identity);
+  var monadIdentity = new Control_Monad.Monad(function () {
+      return applicativeIdentity;
+  }, function () {
+      return bindIdentity;
+  });
+  exports["Identity"] = Identity;
+  exports["newtypeIdentity"] = newtypeIdentity;
+  exports["functorIdentity"] = functorIdentity;
+  exports["applyIdentity"] = applyIdentity;
+  exports["applicativeIdentity"] = applicativeIdentity;
+  exports["bindIdentity"] = bindIdentity;
+  exports["monadIdentity"] = monadIdentity;
+})(PS["Data.Identity"] = PS["Data.Identity"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
   var Control_Applicative = PS["Control.Applicative"];
   var Control_Bind = PS["Control.Bind"];
   var Control_Monad_Rec_Class = PS["Control.Monad.Rec.Class"];
@@ -6551,6 +6800,11 @@ var PS = {};
           return Data_Foldable.foldl(Data_Foldable.foldableArray)(gt)(Data_Maybe.Nothing.value)(a);
       };
   };
+  var maxValue = function (dictOrd) {
+      return function (m) {
+          return maxValue$prime(dictOrd)(Data_Map_Internal.toUnfoldable(Data_Unfoldable.unfoldableArray)(m));
+      };
+  };
   var makePoint = function (x) {
       return function (y) {
           return {
@@ -6573,6 +6827,7 @@ var PS = {};
   exports["splitWords"] = splitWords;
   exports["splitChars"] = splitChars;
   exports["makePoint"] = makePoint;
+  exports["maxValue"] = maxValue;
   exports["maxValue'"] = maxValue$prime;
   exports["ProgramError"] = ProgramError;
   exports["ProgramResult"] = ProgramResult;
@@ -8337,6 +8592,7 @@ var PS = {};
   // Generated by purs version 0.12.0
   "use strict";
   var Control_Applicative = PS["Control.Applicative"];
+  var Control_Apply = PS["Control.Apply"];
   var Control_Bind = PS["Control.Bind"];
   var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
   var Control_Monad_Except = PS["Control.Monad.Except"];
@@ -8385,29 +8641,16 @@ var PS = {};
           throw new Error("Failed pattern match at Day8 line 46, column 3 - line 50, column 52: " + [ v1.constructor.name ]);
       });
   });
-  var showNode = new Data_Show.Show(function (v) {
-      return "Metadata: " + (Data_Show.show(Data_List_Types.showList(Data_Show.showInt))(v.metadata) + ("\x0a" + (function () {
-          if (v.children.length === 0) {
-              return "";
-          };
-          return "Children: \x0a" + Data_Show.show(Data_Show.showArray(showNode))(v.children);
-      })()));
-  });
   var initialState = Data_List_Types.Nil.value;
   var calculateNodeValue = function (metadata) {
-      return function (children) {
-          var getValue = function (n) {
-              var v = Data_Array.index(children)(n - 1 | 0);
-              if (v instanceof Data_Maybe.Just) {
-                  return v.value0.value;
-              };
-              if (v instanceof Data_Maybe.Nothing) {
-                  return 0;
-              };
-              throw new Error("Failed pattern match at Day8 line 57, column 18 - line 61, column 1: " + [ v.constructor.name ]);
-          };
-          if (children.length === 0) {
+      return function (v) {
+          if (v.length === 0) {
               return Data_Foldable.sum(Data_List_Types.foldableList)(Data_Semiring.semiringInt)(metadata);
+          };
+          var getValue = function (i) {
+              return Data_Maybe.maybe(0)(function (v1) {
+                  return v1.value;
+              })(Data_Array.index(v)(i - 1 | 0));
           };
           return Data_Foldable.sum(Data_List_Types.foldableList)(Data_Semiring.semiringInt)(Data_Functor.map(Data_List_Types.functorList)(getValue)(metadata));
       };
@@ -8439,20 +8682,14 @@ var PS = {};
       });
   });
   var solve1 = Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Util["log'"](Control_Monad_State_Trans.monadTellStateT(Control_Monad_Except_Trans.monadTellExceptT(Control_Monad_Writer_Trans.monadTellWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))("Part 1 started"))(function () {
-      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(splitInput)(function (v) {
-          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(parseNode)(function (v1) {
-              return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Util["log'"](Control_Monad_State_Trans.monadTellStateT(Control_Monad_Except_Trans.monadTellExceptT(Control_Monad_Writer_Trans.monadTellWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Show.show(showNode)(v1)))(function () {
-                  return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Show.show(Data_Show.showInt)(sumMetadata(v1)));
-              });
-          });
+      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Control_Apply.applyFirst(Control_Monad_State_Trans.applyStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(parseNode)(splitInput))(function (v) {
+          return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Show.show(Data_Show.showInt)(sumMetadata(v)));
       });
   });
   var part1 = Util.runSubprogram(solve1)(initialState);
   var solve2 = Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Util["log'"](Control_Monad_State_Trans.monadTellStateT(Control_Monad_Except_Trans.monadTellExceptT(Control_Monad_Writer_Trans.monadTellWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))("Part 2 started"))(function () {
-      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(splitInput)(function (v) {
-          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(parseNode)(function (v1) {
-              return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Show.show(Data_Show.showInt)(v1.value));
-          });
+      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Control_Apply.applyFirst(Control_Monad_State_Trans.applyStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(parseNode)(splitInput))(function (v) {
+          return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Show.show(Data_Show.showInt)(v.value));
       });
   });
   var part2 = Util.runSubprogram(solve2)(initialState);
@@ -8465,8 +8702,145 @@ var PS = {};
   exports["part1"] = part1;
   exports["solve2"] = solve2;
   exports["part2"] = part2;
-  exports["showNode"] = showNode;
 })(PS["Day8"] = PS["Day8"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var CircularList = PS["CircularList"];
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Bind = PS["Control.Bind"];
+  var Control_Monad_Except_Trans = PS["Control.Monad.Except.Trans"];
+  var Control_Monad_Reader_Trans = PS["Control.Monad.Reader.Trans"];
+  var Control_Monad_State = PS["Control.Monad.State"];
+  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
+  var Control_Monad_State_Trans = PS["Control.Monad.State.Trans"];
+  var Control_Monad_Writer_Trans = PS["Control.Monad.Writer.Trans"];
+  var Data_Array = PS["Data.Array"];
+  var Data_BigInt = PS["Data.BigInt"];
+  var Data_Boolean = PS["Data.Boolean"];
+  var Data_Eq = PS["Data.Eq"];
+  var Data_EuclideanRing = PS["Data.EuclideanRing"];
+  var Data_Foldable = PS["Data.Foldable"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Identity = PS["Data.Identity"];
+  var Data_List_Types = PS["Data.List.Types"];
+  var Data_Map = PS["Data.Map"];
+  var Data_Map_Internal = PS["Data.Map.Internal"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Data_Tuple = PS["Data.Tuple"];
+  var Partial_Unsafe = PS["Partial.Unsafe"];
+  var Prelude = PS["Prelude"];
+  var Util = PS["Util"];                 
+  var solve2 = (function () {
+      var updateScore = function (amount) {
+          return function (v) {
+              if (v instanceof Data_Maybe.Nothing) {
+                  return new Data_Maybe.Just(Data_BigInt.fromInt(amount));
+              };
+              if (v instanceof Data_Maybe.Just) {
+                  return new Data_Maybe.Just(Data_Semiring.add(Data_BigInt.semiringBigInt)(v.value0)(Data_BigInt.fromInt(amount)));
+              };
+              throw new Error("Failed pattern match at Day9 line 74, column 5 - line 74, column 62: " + [ amount.constructor.name, v.constructor.name ]);
+          };
+      };
+      var scoreMarble = function (v) {
+          return function (x) {
+              var v1 = Data_Maybe.fromJust()(CircularList.popCurrent(Data_Ord.ordInt)(CircularList.shiftLeftN(Data_Ord.ordInt)(7)(v.cl)));
+              var player = Data_EuclideanRing.mod(Data_EuclideanRing.euclideanRingInt)(x)(478);
+              var scores$prime = Data_Map_Internal.alter(Data_Ord.ordInt)(updateScore(x + v1.value0 | 0))(player)(v.scores);
+              return {
+                  cl: v1.value1,
+                  scores: scores$prime
+              };
+          };
+      };
+      var insertMarble = function (v) {
+          return function (x) {
+              if (Data_EuclideanRing.mod(Data_EuclideanRing.euclideanRingInt)(x)(23) === 0) {
+                  return scoreMarble(v)(x);
+              };
+              if (Data_Boolean.otherwise) {
+                  return {
+                      cl: CircularList.insertRight(Data_Ord.ordInt)(x)(CircularList.shiftRight(Data_Ord.ordInt)(v.cl)),
+                      scores: v.scores
+                  };
+              };
+              throw new Error("Failed pattern match at Day9 line 66, column 5 - line 68, column 69: " + [ v.constructor.name, x.constructor.name ]);
+          };
+      };
+      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Util["log'"](Control_Monad_State_Trans.monadTellStateT(Control_Monad_Except_Trans.monadTellExceptT(Control_Monad_Writer_Trans.monadTellWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))("Part 2 started"))(function () {
+          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Control_Monad_State_Class.get(Control_Monad_State_Trans.monadStateStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity))))))(function (v) {
+              var clStart = CircularList.singleton(Data_Ord.ordInt)(0);
+              var acc = {
+                  cl: clStart,
+                  scores: v
+              };
+              var $$final = Data_Foldable.foldl(Data_Foldable.foldableArray)(insertMarble)(acc)(Data_Array.range(1)(7124000));
+              return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Show.show(Data_Maybe.showMaybe(Data_Tuple.showTuple(Data_Show.showInt)(Data_BigInt.showBigInt)))(Util.maxValue(Data_BigInt.ordBigInt)($$final.scores)));
+          });
+      });
+  })();
+  var solve1 = (function () {
+      var updateScore = function (amount) {
+          return function (v) {
+              if (v instanceof Data_Maybe.Nothing) {
+                  return new Data_Maybe.Just(Data_BigInt.fromInt(amount));
+              };
+              if (v instanceof Data_Maybe.Just) {
+                  return new Data_Maybe.Just(Data_Semiring.add(Data_BigInt.semiringBigInt)(v.value0)(Data_BigInt.fromInt(amount)));
+              };
+              throw new Error("Failed pattern match at Day9 line 47, column 5 - line 47, column 62: " + [ amount.constructor.name, v.constructor.name ]);
+          };
+      };
+      var scoreMarble = function (v) {
+          return function (x) {
+              var v1 = Data_Maybe.fromJust()(CircularList.popCurrent(Data_Ord.ordInt)(CircularList.shiftLeftN(Data_Ord.ordInt)(7)(v.cl)));
+              var player = Data_EuclideanRing.mod(Data_EuclideanRing.euclideanRingInt)(x)(478);
+              var scores$prime = Data_Map_Internal.alter(Data_Ord.ordInt)(updateScore(x + v1.value0 | 0))(player)(v.scores);
+              return {
+                  cl: v1.value1,
+                  scores: scores$prime
+              };
+          };
+      };
+      var insertMarble = function (v) {
+          return function (x) {
+              if (Data_EuclideanRing.mod(Data_EuclideanRing.euclideanRingInt)(x)(23) === 0) {
+                  return scoreMarble(v)(x);
+              };
+              if (Data_Boolean.otherwise) {
+                  return {
+                      cl: CircularList.insertRight(Data_Ord.ordInt)(x)(CircularList.shiftRight(Data_Ord.ordInt)(v.cl)),
+                      scores: v.scores
+                  };
+              };
+              throw new Error("Failed pattern match at Day9 line 39, column 5 - line 41, column 69: " + [ v.constructor.name, x.constructor.name ]);
+          };
+      };
+      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Util["log'"](Control_Monad_State_Trans.monadTellStateT(Control_Monad_Except_Trans.monadTellExceptT(Control_Monad_Writer_Trans.monadTellWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))("Part 1 started"))(function () {
+          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Control_Monad_State_Class.get(Control_Monad_State_Trans.monadStateStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity))))))(function (v) {
+              var clStart = CircularList.singleton(Data_Ord.ordInt)(0);
+              var acc = {
+                  cl: clStart,
+                  scores: v
+              };
+              var $$final = Data_Foldable.foldl(Data_Foldable.foldableArray)(insertMarble)(acc)(Data_Array.range(1)(71240));
+              return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Show.show(Data_Maybe.showMaybe(Data_Tuple.showTuple(Data_Show.showInt)(Data_BigInt.showBigInt)))(Util.maxValue(Data_BigInt.ordBigInt)($$final.scores)));
+          });
+      });
+  })();
+  var initialState = Data_Map_Internal.empty;
+  var part1 = Util.runSubprogram(solve1)(initialState);
+  var part2 = Util.runSubprogram(solve2)(initialState);
+  exports["initialState"] = initialState;
+  exports["solve1"] = solve1;
+  exports["part1"] = part1;
+  exports["solve2"] = solve2;
+  exports["part2"] = part2;
+})(PS["Day9"] = PS["Day9"] || {});
 (function(exports) {
     "use strict";
 
@@ -8699,6 +9073,7 @@ var PS = {};
   var Day6 = PS["Day6"];
   var Day7 = PS["Day7"];
   var Day8 = PS["Day8"];
+  var Day9 = PS["Day9"];
   var Effect = PS["Effect"];
   var Effect_Console = PS["Effect.Console"];
   var Foreign = PS["Foreign"];
@@ -8737,6 +9112,10 @@ var PS = {};
       day: 8,
       part1: Day8.part1,
       part2: Day8.part2
+  }, {
+      day: 9,
+      part1: Day9.part1,
+      part2: Day9.part2
   } ];
   var handleClick = function (func) {
       return function (v) {
@@ -8755,7 +9134,7 @@ var PS = {};
                           return JQuery.setText("Error: " + e)(v3);
                       })(v4.value1)();
                   };
-                  throw new Error("Failed pattern match at Main line 42, column 3 - line 48, column 61: " + [ v4.constructor.name ]);
+                  throw new Error("Failed pattern match at Main line 44, column 3 - line 50, column 61: " + [ v4.constructor.name ]);
               };
           };
       };

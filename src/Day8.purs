@@ -12,7 +12,7 @@ import Data.Foldable (sum)
 import Data.Int (fromString) as Int
 import Data.List (List(..), (!!))
 import Data.List (drop, fromFoldable, length, take) as List
-import Data.Maybe (Maybe(..), fromJust)
+import Data.Maybe (Maybe(..), fromJust, maybe)
 import Data.Traversable (traverse)
 import Partial.Unsafe (unsafePartial)
 import Util (MainProgram, Program, log', runSubprogram)
@@ -50,13 +50,9 @@ splitInput = do
     Nothing -> throwError ["unable to parse input"]
 
 calculateNodeValue :: List Metadata -> Array Node -> Int
-calculateNodeValue metadata children = case children of
-  [] -> sum metadata
-  _ -> sum $ (getValue <$> metadata)
-  where
-    getValue n = case Array.index children (n-1) of
-      Just (Node node) -> node.value
-      Nothing -> 0
+calculateNodeValue metadata [] = sum metadata
+calculateNodeValue metadata children =  sum $ (getValue <$> metadata)
+  where getValue i = maybe 0 (\(Node n) -> n.value) $ Array.index children (i-1)
 
 parseNode :: Day8Program Node
 parseNode = do
@@ -83,12 +79,11 @@ parseNode = do
 sumMetadata :: Node -> Int
 sumMetadata (Node node) = sum node.metadata + sum (sumMetadata <$> node.children)
 
+-- solve1 "2 3 0 3 10 11 12 1 1 0 1 99 2 1 1 2" = 138
 solve1 :: Day8Program String
 solve1 = do
   log' "Part 1 started"
-  _ <- splitInput
-  head <- parseNode
-  log' $ show head
+  head <- parseNode <* splitInput
 
   pure $ show $ sumMetadata head
 
@@ -98,8 +93,7 @@ part1 = runSubprogram solve1 initialState
 solve2 :: Day8Program String
 solve2 = do
   log' "Part 2 started"
-  _ <- splitInput
-  (Node head) <- parseNode
+  (Node head) <- parseNode <* splitInput
 
   pure $ show $ head.value
 
