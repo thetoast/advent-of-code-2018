@@ -3,7 +3,7 @@ module Util where
 import Prelude
 
 import Control.Monad.Cont (lift)
-import Control.Monad.Except (ExceptT, except, runExceptT, throwError)
+import Control.Monad.Except (class MonadError, ExceptT, except, runExceptT, throwError)
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.State (StateT, runStateT)
 import Control.Monad.Writer (class MonadTell, WriterT, runWriterT, tell)
@@ -81,6 +81,11 @@ runSubprogram sub state = do
     ProgramError logs errs -> do
       tell logs
       throwError errs
+
+throwLog :: forall m. MonadTell Logs m => MonadError Errors m => String -> m Unit
+throwLog str = do
+  log' str
+  throwError [str]
 
 log' :: forall m. MonadTell Logs m => String -> m Unit
 log' = tell <<< List.singleton
