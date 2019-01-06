@@ -13,6 +13,7 @@ import Day7 as Day7
 import Day8 as Day8
 import Day9 as Day9
 import Day10 as Day10
+import Day11 as Day11
 import Effect (Effect)
 import Effect.Console (log)
 import Foreign (unsafeFromForeign)
@@ -36,7 +37,8 @@ tests = [
     {day: 7, part1: Day7.part1, part2: Day7.part2},
     {day: 8, part1: Day8.part1, part2: Day8.part2},
     {day: 9, part1: Day9.part1, part2: Day9.part2},
-    {day: 10, part1: Day10.part1, part2: Day10.part2}
+    {day: 10, part1: Day10.part1, part2: Day10.part2},
+    {day: 11, part1: Day11.part1, part2: Day11.part2}
 ]
 
 handleClick :: MainProgram -> J.JQueryEvent -> J.JQuery -> Effect Unit

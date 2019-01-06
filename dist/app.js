@@ -7700,6 +7700,260 @@ var PS = {};
   "use strict";
   var Control_Applicative = PS["Control.Applicative"];
   var Control_Bind = PS["Control.Bind"];
+  var Control_Monad_Error_Class = PS["Control.Monad.Error.Class"];
+  var Control_Monad_Except = PS["Control.Monad.Except"];
+  var Control_Monad_Except_Trans = PS["Control.Monad.Except.Trans"];
+  var Control_Monad_Reader = PS["Control.Monad.Reader"];
+  var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
+  var Control_Monad_Reader_Trans = PS["Control.Monad.Reader.Trans"];
+  var Control_Monad_State = PS["Control.Monad.State"];
+  var Control_Monad_State_Class = PS["Control.Monad.State.Class"];
+  var Control_Monad_State_Trans = PS["Control.Monad.State.Trans"];
+  var Control_Monad_Writer_Trans = PS["Control.Monad.Writer.Trans"];
+  var Data_Array = PS["Data.Array"];
+  var Data_EuclideanRing = PS["Data.EuclideanRing"];
+  var Data_Foldable = PS["Data.Foldable"];
+  var Data_Function = PS["Data.Function"];
+  var Data_Functor = PS["Data.Functor"];
+  var Data_Identity = PS["Data.Identity"];
+  var Data_Int = PS["Data.Int"];
+  var Data_List_Types = PS["Data.List.Types"];
+  var Data_Maybe = PS["Data.Maybe"];
+  var Data_Ord = PS["Data.Ord"];
+  var Data_Ring = PS["Data.Ring"];
+  var Data_Semigroup = PS["Data.Semigroup"];
+  var Data_Semiring = PS["Data.Semiring"];
+  var Data_Show = PS["Data.Show"];
+  var Data_Traversable = PS["Data.Traversable"];
+  var Data_Unit = PS["Data.Unit"];
+  var Partial_Unsafe = PS["Partial.Unsafe"];
+  var Prelude = PS["Prelude"];
+  var Util = PS["Util"];                 
+  var insertPowerLevel = function (v) {
+      return function (cell) {
+          return function (grid) {
+              var updateY = function (col) {
+                  return Data_Maybe.fromJust()(Data_Array.updateAt(v.y)(cell)(col));
+              };
+              var updateCell = Data_Maybe.fromJust()(Data_Array.modifyAt(v.x)(updateY)(grid));
+              return updateCell;
+          };
+      };
+  };
+  var getGroupPowerLevel = function (v) {
+      return function (size) {
+          return function (grid) {
+              var rightX = (v.x + size | 0) - 1 | 0;
+              var lookup = function (x$prime) {
+                  return function (y$prime) {
+                      return Data_Maybe.fromJust()(Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Array.index(grid)(x$prime))(function (v1) {
+                          return Data_Array.index(v1)(y$prime);
+                      }));
+                  };
+              };
+              var bottomY = (v.y + size | 0) - 1 | 0;
+              var target = lookup(rightX)(bottomY);
+              var calculate = function (v1) {
+                  return function (v2) {
+                      if (v1 === 0 && v2 === 0) {
+                          return target;
+                      };
+                      if (v1 === 0) {
+                          return target - lookup(rightX)(v.y - 1 | 0) | 0;
+                      };
+                      if (v2 === 0) {
+                          return target - lookup(v.x - 1 | 0)(bottomY) | 0;
+                      };
+                      return ((target - lookup(v.x - 1 | 0)(bottomY) | 0) - lookup(rightX)(v.y - 1 | 0) | 0) + lookup(v.x - 1 | 0)(v.y - 1 | 0) | 0;
+                  };
+              };
+              return calculate(v.x)(v.y);
+          };
+      };
+  };
+  var getAndUpdateMaxGroupLevel = function (point) {
+      return function (size) {
+          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Control_Monad_State_Class.get(Control_Monad_State_Trans.monadStateStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity))))))(function (v) {
+              var value = getGroupPowerLevel(point)(size)(v.grid);
+              if (v.largestValue instanceof Data_Maybe.Nothing) {
+                  return Control_Monad_State_Class.put(Control_Monad_State_Trans.monadStateStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))((function () {
+                      var $50 = {};
+                      for (var $51 in v) {
+                          if ({}.hasOwnProperty.call(v, $51)) {
+                              $50[$51] = v[$51];
+                          };
+                      };
+                      $50.largestGroup = new Data_Maybe.Just(point);
+                      $50.largestSize = new Data_Maybe.Just(size);
+                      $50.largestValue = new Data_Maybe.Just(value);
+                      return $50;
+                  })());
+              };
+              if (v.largestValue instanceof Data_Maybe.Just) {
+                  var $53 = value > v.largestValue.value0;
+                  if ($53) {
+                      return Control_Monad_State_Class.put(Control_Monad_State_Trans.monadStateStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))((function () {
+                          var $54 = {};
+                          for (var $55 in v) {
+                              if ({}.hasOwnProperty.call(v, $55)) {
+                                  $54[$55] = v[$55];
+                              };
+                          };
+                          $54.largestGroup = new Data_Maybe.Just(point);
+                          $54.largestSize = new Data_Maybe.Just(size);
+                          $54.largestValue = new Data_Maybe.Just(value);
+                          return $54;
+                      })());
+                  };
+                  return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Unit.unit);
+              };
+              throw new Error("Failed pattern match at Day11 line 88, column 3 - line 100, column 21: " + [ v.largestValue.constructor.name ]);
+          });
+      };
+  };
+  var findLargestOfSize = function (size) {
+      return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Functor.map(Control_Monad_State_Trans.functorStateT(Control_Monad_Except_Trans.functorExceptT(Control_Monad_Writer_Trans.functorWriterT(Control_Monad_Reader_Trans.functorReaderT(Data_Identity.functorIdentity)))))(Data_Functor.map(Data_Functor.functorFn)(Data_Maybe.fromJust())(Data_Int.fromString))(Control_Monad_Reader_Class.ask(Control_Monad_State_Trans.monadAskStateT(Control_Monad_Except_Trans.monadAskExceptT(Control_Monad_Writer_Trans.monadAskWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadAskReaderT(Data_Identity.monadIdentity)))))))(function (v) {
+          var maxIndex = (299 - size | 0) + 1 | 0;
+          var getLevel = function (point) {
+              return getAndUpdateMaxGroupLevel(point)(size);
+          };
+          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Traversable.sequence(Data_Traversable.traversableArray)(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Functor.map(Data_Functor.functorArray)(getLevel)(Control_Bind.bindFlipped(Control_Bind.bindArray)(Data_Traversable.traverse(Data_Traversable.traversableArray)(Control_Applicative.applicativeFn)(function (v1) {
+              return function (v2) {
+                  return {
+                      x: v1,
+                      y: v2
+                  };
+              };
+          })(Data_Array.range(0)(maxIndex)))(Data_Array.range(0)(maxIndex)))))(function (v1) {
+              return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Unit.unit);
+          });
+      });
+  };
+  var solve1 = Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Util["log'"](Control_Monad_State_Trans.monadTellStateT(Control_Monad_Except_Trans.monadTellExceptT(Control_Monad_Writer_Trans.monadTellWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))("Part 1 started"))(function () {
+      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(findLargestOfSize(3))(function () {
+          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Control_Monad_State_Class.get(Control_Monad_State_Trans.monadStateStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity))))))(function (v) {
+              if (v.largestGroup instanceof Data_Maybe.Nothing) {
+                  return Control_Monad_Error_Class.throwError(Control_Monad_State_Trans.monadThrowStateT(Control_Monad_Except_Trans.monadThrowExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))([ "did not find largest group" ]);
+              };
+              if (v.largestGroup instanceof Data_Maybe.Just) {
+                  return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Show.show(Data_Show.showInt)(v.largestGroup.value0.x + 1 | 0) + ("," + Data_Show.show(Data_Show.showInt)(v.largestGroup.value0.y + 1 | 0)));
+              };
+              throw new Error("Failed pattern match at Day11 line 115, column 3 - line 117, column 73: " + [ v.largestGroup.constructor.name ]);
+          });
+      });
+  });
+  var solve2 = Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Util["log'"](Control_Monad_State_Trans.monadTellStateT(Control_Monad_Except_Trans.monadTellExceptT(Control_Monad_Writer_Trans.monadTellWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))("Part 2 started"))(function () {
+      return Control_Bind.discard(Control_Bind.discardUnit)(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Foldable.traverse_(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Foldable.foldableArray)(findLargestOfSize)(Data_Array.range(1)(300)))(function () {
+          return Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Control_Monad_State_Class.get(Control_Monad_State_Trans.monadStateStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity))))))(function (v) {
+              if (v.largestGroup instanceof Data_Maybe.Nothing) {
+                  return Control_Monad_Error_Class.throwError(Control_Monad_State_Trans.monadThrowStateT(Control_Monad_Except_Trans.monadThrowExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))([ "did not find largest group" ]);
+              };
+              if (v.largestGroup instanceof Data_Maybe.Just) {
+                  if (v.largestSize instanceof Data_Maybe.Nothing) {
+                      return Control_Monad_Error_Class.throwError(Control_Monad_State_Trans.monadThrowStateT(Control_Monad_Except_Trans.monadThrowExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))([ "did not find largest size" ]);
+                  };
+                  if (v.largestSize instanceof Data_Maybe.Just) {
+                      if (v.largestValue instanceof Data_Maybe.Nothing) {
+                          return Control_Monad_Error_Class.throwError(Control_Monad_State_Trans.monadThrowStateT(Control_Monad_Except_Trans.monadThrowExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))([ "did not find largest value" ]);
+                      };
+                      if (v.largestValue instanceof Data_Maybe.Just) {
+                          return Control_Applicative.pure(Control_Monad_State_Trans.applicativeStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Show.show(Data_Show.showInt)(v.largestGroup.value0.x + 1 | 0) + ("," + (Data_Show.show(Data_Show.showInt)(v.largestGroup.value0.y + 1 | 0) + ("," + (Data_Show.show(Data_Show.showInt)(v.largestSize.value0) + (": " + Data_Show.show(Data_Show.showInt)(v.largestValue.value0)))))));
+                      };
+                      throw new Error("Failed pattern match at Day11 line 133, column 37 - line 138, column 83: " + [ v.largestValue.constructor.name ]);
+                  };
+                  throw new Error("Failed pattern match at Day11 line 131, column 19 - line 138, column 83: " + [ v.largestSize.constructor.name ]);
+              };
+              throw new Error("Failed pattern match at Day11 line 129, column 3 - line 138, column 83: " + [ v.largestGroup.constructor.name ]);
+          });
+      });
+  });
+  var calculatePowerLevel = function (v) {
+      return function (serial) {
+          var rackId = (v.x + 1 | 0) + 10 | 0;
+          var step1 = rackId * (v.y + 1 | 0) | 0;
+          var step2 = step1 + serial | 0;
+          var step3 = step2 * rackId | 0;
+          var finalLevel = Data_EuclideanRing.mod(Data_EuclideanRing.euclideanRingInt)(Data_EuclideanRing.div(Data_EuclideanRing.euclideanRingInt)(step3)(100))(10);
+          return finalLevel - 5 | 0;
+      };
+  };
+  var sumAt = function (serial) {
+      return function (grid) {
+          return function (v) {
+              if (v.x === 0 && v.y === 0) {
+                  return insertPowerLevel(v)(calculatePowerLevel(v)(serial))(grid);
+              };
+              if (v.y === 0) {
+                  var left = Data_Maybe.fromJust()(Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Array.index(grid)(v.x - 1 | 0))(function (v1) {
+                      return Data_Array.index(v1)(0);
+                  }));
+                  return insertPowerLevel(v)(left + calculatePowerLevel(v)(serial) | 0)(grid);
+              };
+              if (v.x === 0) {
+                  var above = Data_Maybe.fromJust()(Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Array.index(grid)(0))(function (v1) {
+                      return Data_Array.index(v1)(v.y - 1 | 0);
+                  }));
+                  return insertPowerLevel(v)(above + calculatePowerLevel(v)(serial) | 0)(grid);
+              };
+              var left = Data_Maybe.fromJust()(Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Array.index(grid)(v.x - 1 | 0))(function (v1) {
+                  return Data_Array.index(v1)(v.y);
+              }));
+              var diagonal = Data_Maybe.fromJust()(Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Array.index(grid)(v.x - 1 | 0))(function (v1) {
+                  return Data_Array.index(v1)(v.y - 1 | 0);
+              }));
+              var above = Data_Maybe.fromJust()(Control_Bind.bind(Data_Maybe.bindMaybe)(Data_Array.index(grid)(v.x))(function (v1) {
+                  return Data_Array.index(v1)(v.y - 1 | 0);
+              }));
+              var delta = (above + left | 0) - diagonal | 0;
+              return insertPowerLevel(v)(delta + calculatePowerLevel(v)(serial) | 0)(grid);
+          };
+      };
+  };
+  var initialState = function (serial) {
+      var points = Control_Bind.join(Control_Bind.bindArray)(Data_Functor.map(Data_Functor.functorArray)(Data_Traversable.traverse(Data_Traversable.traversableArray)(Control_Applicative.applicativeFn)(function (v) {
+          return function (v1) {
+              return {
+                  x: v,
+                  y: v1
+              };
+          };
+      })(Data_Array.range(0)(299)))(Data_Array.range(0)(299)));
+      var initialGrid = Data_Functor.map(Data_Functor.functorArray)(function (x) {
+          return Data_Functor.map(Data_Functor.functorArray)(function (y) {
+              return 0;
+          })(Data_Array.range(0)(299));
+      })(Data_Array.range(0)(299));
+      var grid = Data_Foldable.foldl(Data_Foldable.foldableArray)(sumAt(serial))(initialGrid)(points);
+      return {
+          grid: grid,
+          largestGroup: Data_Maybe.Nothing.value,
+          largestSize: Data_Maybe.Nothing.value,
+          largestValue: Data_Maybe.Nothing.value
+      };
+  };
+  var part1 = Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Functor.map(Control_Monad_State_Trans.functorStateT(Control_Monad_Except_Trans.functorExceptT(Control_Monad_Writer_Trans.functorWriterT(Control_Monad_Reader_Trans.functorReaderT(Data_Identity.functorIdentity)))))(Data_Functor.map(Data_Functor.functorFn)(Data_Maybe.fromJust())(Data_Int.fromString))(Control_Monad_Reader_Class.ask(Control_Monad_State_Trans.monadAskStateT(Control_Monad_Except_Trans.monadAskExceptT(Control_Monad_Writer_Trans.monadAskWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadAskReaderT(Data_Identity.monadIdentity)))))))(function (v) {
+      return Util.runSubprogram(solve1)(initialState(v));
+  });
+  var part2 = Control_Bind.bind(Control_Monad_State_Trans.bindStateT(Control_Monad_Except_Trans.monadExceptT(Control_Monad_Writer_Trans.monadWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadReaderT(Data_Identity.monadIdentity)))))(Data_Functor.map(Control_Monad_State_Trans.functorStateT(Control_Monad_Except_Trans.functorExceptT(Control_Monad_Writer_Trans.functorWriterT(Control_Monad_Reader_Trans.functorReaderT(Data_Identity.functorIdentity)))))(Data_Functor.map(Data_Functor.functorFn)(Data_Maybe.fromJust())(Data_Int.fromString))(Control_Monad_Reader_Class.ask(Control_Monad_State_Trans.monadAskStateT(Control_Monad_Except_Trans.monadAskExceptT(Control_Monad_Writer_Trans.monadAskWriterT(Data_List_Types.monoidList)(Control_Monad_Reader_Trans.monadAskReaderT(Data_Identity.monadIdentity)))))))(function (v) {
+      return Util.runSubprogram(solve2)(initialState(v));
+  });
+  exports["sumAt"] = sumAt;
+  exports["initialState"] = initialState;
+  exports["calculatePowerLevel"] = calculatePowerLevel;
+  exports["insertPowerLevel"] = insertPowerLevel;
+  exports["getGroupPowerLevel"] = getGroupPowerLevel;
+  exports["getAndUpdateMaxGroupLevel"] = getAndUpdateMaxGroupLevel;
+  exports["findLargestOfSize"] = findLargestOfSize;
+  exports["solve1"] = solve1;
+  exports["part1"] = part1;
+  exports["solve2"] = solve2;
+  exports["part2"] = part2;
+})(PS["Day11"] = PS["Day11"] || {});
+(function(exports) {
+  // Generated by purs version 0.12.0
+  "use strict";
+  var Control_Applicative = PS["Control.Applicative"];
+  var Control_Bind = PS["Control.Bind"];
   var Control_Monad_Except_Trans = PS["Control.Monad.Except.Trans"];
   var Control_Monad_RWS = PS["Control.Monad.RWS"];
   var Control_Monad_Reader_Class = PS["Control.Monad.Reader.Class"];
@@ -9742,6 +9996,7 @@ var PS = {};
   var Data_Traversable = PS["Data.Traversable"];
   var Day1 = PS["Day1"];
   var Day10 = PS["Day10"];
+  var Day11 = PS["Day11"];
   var Day2 = PS["Day2"];
   var Day3 = PS["Day3"];
   var Day4 = PS["Day4"];
@@ -9796,6 +10051,10 @@ var PS = {};
       day: 10,
       part1: Day10.part1,
       part2: Day10.part2
+  }, {
+      day: 11,
+      part1: Day11.part1,
+      part2: Day11.part2
   } ];
   var handleClick = function (func) {
       return function (v) {
@@ -9814,7 +10073,7 @@ var PS = {};
                           return JQuery.setText("Error: " + e)(v3);
                       })(v4.value1)();
                   };
-                  throw new Error("Failed pattern match at Main line 46, column 3 - line 52, column 61: " + [ v4.constructor.name ]);
+                  throw new Error("Failed pattern match at Main line 48, column 3 - line 54, column 61: " + [ v4.constructor.name ]);
               };
           };
       };
